@@ -271,9 +271,9 @@ class gaussian_state:                                                           
         
         nu = self.symplectic_eigenvalues();                                     # Calculates the sympletic eigenvalues of a covariance matrix V
         
-        nu[nu==1] = nu[nu==1] + 5e-16;                                          # 0*log(0) is NaN, but in the limit that x->0 : x*log(x) -> 0
-                                                                                # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
-                                          
+                                                                                # 0*log(0) is NaN, but in the limit that x->0 : x*log(x) -> 0
+        nu[np.abs(nu - 1) < 1e-15] = nu[np.abs(nu - 1) < 1e-15] + 1e-15;                                 # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
+        
         nu_plus  = (nu + 1)/2.0;                                                # Temporary variables
         nu_minus = (nu - 1)/2.0;
         g_nu = np.multiply(nu_plus,np.log(nu_plus)) - np.multiply(nu_minus, np.log(nu_minus))
@@ -343,6 +343,46 @@ class gaussian_state:                                                           
         C = temp - S_total;                                                     # Calculation of the mutual information
         return C
     
+    
+    def logarithmic_negativity(self, *args):
+        """
+        Calculation of the logarithmic negativity for a bipartite system
+       
+        PARAMETERS:
+           indexes - array with indices for the bipartition to consider 
+           If the system is already bipartite, this parameter is optional !
+       
+        CALCULATES:
+           LN - logarithmic negativity for the bipartition / bipartite states
+        """
+        
+        temp = self.N_modes;
+        if(temp == 2):                                                          # If the full system is only comprised of two modes
+            V0 = self.V;                                                        # Take its full covariance matrix
+        elif(len(args) > 1 & temp > 2):
+            indexes = args[1]
+            
+            assert len(indexes) == 2, "Can only calculate the logarithmic negativity for a bipartition!"
+                
+            bipartition = self.only_modes(indexes);                             # Otherwise, get only the two mode specified by the user
+            V0 = bipartition.V;                                                 # Take the full Covariance matrix of this subsystem
+        
+        A = V0(0:2, 0:2);                                                       # Make use of its submatrices
+        B = V0(2:4, 2:4);
+        C = V0(0:2, 2:4);
+        
+        sigma = det(A) + det(B) - 2.0*det(C);                                   # Auxiliar variable
+        
+        ni = sigma/2.0 - sqrt( sigma^2 - 4.0*det(V0) )/2.0 ;                    # Square of the smallest of the symplectic eigenvalues of the partially transposed covariance matrix
+        
+        if ni < 0.0                                                             # Manually perform a maximum to save computational time (calculation of a sqrt can take too much time and deal with residual numeric imaginary parts)
+            LN = 0.0;
+        else
+            ni = sqrt( real(ni) );                                              # Smallest of the symplectic eigenvalues of the partially transposed covariance matrix
+        
+        LN = max([0, -log(ni)]);                                                # Calculate the logarithmic negativity at each time
+        return LN
+    
     # Gaussian unitaries
     # Applicable to single mode states
     def displace(self, alpha):
@@ -356,12 +396,12 @@ class gaussian_state:                                                           
         
         assert self.N_modes   == 1, "Can only apply displacement operator on single mode state"
         d = np.array([[alpha.real], [alpha.imag]]);
-        self.R = obj.R + d;
+        self.R = self.R + d;
       
         # If a displacement is attempted at a whole array of states, it is possible to apply a displacement in every entry
         # however, I cannot see why this would be the desired effect, I prefer to consider an error
         # assert(all([obj.N_modes]) == 1, "Can only apply displacement operator on single mode state")
-        
+    
     def squeeze(self, r):
         """
         Apply squeezing operator on a single mode gaussian state
@@ -406,9 +446,9 @@ class gaussian_state:                                                           
         
         assert self.N_modes==2, "Beam splitter transformation can only be applied for a two mode system"
         
-        B = np.sqrt(tau)*np.indentity(2)
+        B = np.sqrt(tau)*np.identity(2)
         S = np.sqrt(1-tau)*np.indentity(2)
-        BS = np.array([[B, S], [-S, B]])
+        BS = np.block([[B, S], [-S, B]])
         BS_T = np.transpose(BS)
         
         self.R = np.matmul(BS, self.R);
@@ -425,16 +465,16 @@ class gaussian_state:                                                           
         
         assert self.N_modes==2, "Two mode squeezing operator can only be applied for a two mode system"
         
-        S0 = np.cosh(r)*np.indentity(2);
+        S0 = np.cosh(r)*np.identity(2);
         S1 = np.sinh(r)*np.diag([+1,-1]);
-        S2 = np.array([[S0, S1], [S1, S0]])
+        
+        S2 = np.block([[S0, S1], [S1, S0]])
         S2_T = np.transpose(S2)
         
         self.R = np.matmul(S2, self.R);
-        self.V = np.matmul( np.matmul(S2, self.V, S2_T)
+        self.V = np.matmul( np.matmul(S2, self.V), S2_T)
     
-     
-    
+    # Wigner, Fidelity, log. neg.
     
 ###############################################################################
 
@@ -442,15 +482,14 @@ a = gaussian_state("thermal", 100)
 
 b = gaussian_state("squeezed", 1.2)
 b.displace(2 + 5j)
-b.tensor_product(b)
-bb = b.tensor_product(b)
-bb.two_mode_squeezing0.5)
+
+b.tensor_product([b])
+bb = b.tensor_product([b])
 bb.two_mode_squeezing(0.5)
-b = bb.partial_trace([2])
+
+b = bb.partial_trace([1])
 
 c = gaussian_state("coherent", 2+1j);
-
-
 
 tripartite = a.tensor_product([b,c])
 
@@ -475,3 +514,9 @@ I = tripartite.mutual_information()
 #nbar_th = c.occupation_number()
 
 nbar3 = tripartite.occupation_number()
+
+
+
+
+
+
