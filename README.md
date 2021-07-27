@@ -2,7 +2,7 @@
 
 # Quantum Gaussian Information Numerical Toolbox
 
-This is a MATLAB Toolbox for numerical simulation of quantum gaussian states and their dynamics dictated by a set of linear Langevin and Lyapunov equations
+This is a Python Toolbox for numerical simulation of quantum gaussian states and their dynamics dictated by a set of linear Langevin and Lyapunov equations
 
 For the full description and notation used for gaussian quantum states, please refere to [[Rev. Mod. Phys. 84, 621]](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621). Particularly, for the quantum fidelity, see [[Phys. Rev. Lett. 115, 260501]](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.115.260501).
 
