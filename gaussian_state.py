@@ -260,19 +260,197 @@ class gaussian_state:                                                           
       
         eta = V_sq/V_asq;
         return eta, V_sq, V_asq
+    
+    def von_Neumann_Entropy(self):
+        """
+        Calculation of the von Neumann entropy for a multipartite gaussian system
+       
+        CALCULATES:
+             Entropy - von Neumann entropy of the multimode state
+        """
+        
+        nu = self.symplectic_eigenvalues();                                     # Calculates the sympletic eigenvalues of a covariance matrix V
+        
+        nu[nu==1] = nu[nu==1] + 5e-16;                                          # 0*log(0) is NaN, but in the limit that x->0 : x*log(x) -> 0
+                                                                                # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
+                                          
+        nu_plus  = (nu + 1)/2.0;                                                # Temporary variables
+        nu_minus = (nu - 1)/2.0;
+        g_nu = np.multiply(nu_plus,np.log(nu_plus)) - np.multiply(nu_minus, np.log(nu_minus))
+      
+        Entropy = np.sum( g_nu );                                               # Calculate the entropy
+        return Entropy
+    
+    def mutual_information(self):
+        """
+         Mutual information for a multipartite gaussian system
+        
+         CALCULATES:
+            I     - mutual information  for the total system of the j-th covariance matrix
+            S_tot - von Neumann entropy for the total system of the j-th covariance matrix
+            S     - von Neumann entropy for the i-th mode    of the j-th covariance matrix
+        """
+        S = np.zeros((self.N_modes, 1));                                        # Variable to store the entropy of each mode
+      
+        for j in range(self.N_modes):                                           # Loop through each mode
+            single_mode = self.only_modes([j]);                                   # Get the covariance matrix for only the i-th mode
+            S[j] = single_mode.von_Neumann_Entropy();                           # von Neumann Entropy for i-th mode of each covariance matrix
+      
+        S_tot = self.von_Neumann_Entropy();                                      # von Neumann Entropy for the total system of each covariance matrix
+      
+        I = np.sum(S) - S_tot;                                                     # Calculation of the mutual information
+        return I
+    
+    def occupation_number(self):
+        """
+        Occupation number for a each single mode within the multipartite gaussian state (array)
+        
+        CALCULATES:
+            nbar - array with the occupation number for each single mode of the multipartite gaussian state
+        """
+        
+        Variances = np.diag(self.V);                                                # From the current CM, take take the variances
+        Variances = np.vstack(Variances)
+        
+        mean_x = self.R[::2];                                                    # Odd  entries are the mean values of the position
+        mean_p = self.R[1::2];                                                   # Even entries are the mean values of the momentum
+        
+        Var_x = Variances[::2];                                                 # Odd  entries are position variances
+        Var_p = Variances[1::2];                                                # Even entries are momentum variances
+        
+        nbar = 0.25*( Var_x + mean_x**2 + Var_p + mean_p**2 ) - 0.5;            # Calculate occupantion numbers at current time
+        return nbar
+    
+    def coherence(self):
+        """
+        Coherence of a multipartite gaussian system
+         
+        CALCULATES:
+            C - coherence
+        
+        REFERENCE: 
+            Phys. Rev. A 93, 032111 (2016).
+        """
+        
+        nbar = self.occupation_number();                                        # Array with each single mode occupation number
+        
+        nbar[nbar==0] = nbar[nbar==0] + 1e-16;                                  # Make sure there is no problem with log(0)!
+        
+        S_total = self.von_Neumann_Entropy();                                    # von Neumann Entropy for the total system
+        
+        temp = np.sum( np.multiply(nbar+1, np.log2(nbar+1)) - np.multiply(nbar, np.log2(nbar)) );                # Temporary variable
+        
+        C = temp - S_total;                                                     # Calculation of the mutual information
+        return C
+    
+    # Gaussian unitaries
+    # Applicable to single mode states
+    def displace(self, alpha):
+        """
+        Apply displacement operator on a single mode gaussian state
+        TO DO: generalize these operation to many modes!
+       
+        ARGUMENT:
+           alpha - ampllitude for the displacement operator
+        """
+        
+        assert self.N_modes   == 1, "Can only apply displacement operator on single mode state"
+        d = np.array([[alpha.real], [alpha.imag]]);
+        self.R = obj.R + d;
+      
+        # If a displacement is attempted at a whole array of states, it is possible to apply a displacement in every entry
+        # however, I cannot see why this would be the desired effect, I prefer to consider an error
+        # assert(all([obj.N_modes]) == 1, "Can only apply displacement operator on single mode state")
+        
+    def squeeze(self, r):
+        """
+        Apply squeezing operator on a single mode gaussian state
+        TO DO: generalize these operation to many modes!
+        
+        ARGUMENT:
+           r - ampllitude for the squeezing operator
+        """
+        
+        assert self.N_modes == 1, "Error with input arguments when trying to apply displacement operator"
+        S = np.diag([np.exp(-r), np.exp(+r)]);
+        
+        self.R = np.matmul(S, self.R);
+        self.V = np.matmul( np.matmul(S,self.V), S);
+    
+    
+    def rotate(self, theta):
+        """
+        Apply phase rotation on a single mode gaussian state
+        TO DO: generalize these operation to many modes!
+        
+        ARGUMENT:
+           theta - ampllitude for the rotation operator
+        """
+        
+        assert self.N_modes == 1, "Error with input arguments when trying to apply displacement operator"
+        Rot = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        Rot_T = np.transpose(Rot)
+        
+        self.R = np.matmul(Rot, self.R);
+        self.V = np.matmul( np.matmul(Rot, self.V), Rot_T);
+    
+    # Two mode states
+    def beam_splitter(self, tau):
+        """
+        Apply a beam splitter transformation in a gaussian state
+        tau - transmissivity of the beam splitter
+        
+        ARGUMENT:
+           tau - ampllitude for the beam splitter operator
+        """
+        
+        assert self.N_modes==2, "Beam splitter transformation can only be applied for a two mode system"
+        
+        B = np.sqrt(tau)*np.indentity(2)
+        S = np.sqrt(1-tau)*np.indentity(2)
+        BS = np.array([[B, S], [-S, B]])
+        BS_T = np.transpose(BS)
+        
+        self.R = np.matmul(BS, self.R);
+        self.V = np.matmul( np.matmul(BS, self.V), BS_T);
+    
+    def two_mode_squeezing(self, r):
+        """
+        Apply a two mode squeezing operator  in a gaussian state
+        r - squeezing parameter
+        
+        ARGUMENT:
+           r - ampllitude for the two-mode squeezing operator
+        """
+        
+        assert self.N_modes==2, "Two mode squeezing operator can only be applied for a two mode system"
+        
+        S0 = np.cosh(r)*np.indentity(2);
+        S1 = np.sinh(r)*np.diag([+1,-1]);
+        S2 = np.array([[S0, S1], [S1, S0]])
+        S2_T = np.transpose(S2)
+        
+        self.R = np.matmul(S2, self.R);
+        self.V = np.matmul( np.matmul(S2, self.V, S2_T)
+    
+     
+    
+    
 ###############################################################################
 
-Ra = np.array([1,2])
-Va = np.array([[10, 20],[30,40]])
+a = gaussian_state("thermal", 100)
 
-Rb = np.array([3,4])
-Vb = np.array([[-10, -20],[-30,-40]])
+b = gaussian_state("squeezed", 1.2)
+b.displace(2 + 5j)
+b.tensor_product(b)
+bb = b.tensor_product(b)
+bb.two_mode_squeezing0.5)
+bb.two_mode_squeezing(0.5)
+b = bb.partial_trace([2])
 
-a = gaussian_state(Ra, Va)
+c = gaussian_state("coherent", 2+1j);
 
-b = gaussian_state(Rb, Vb)
 
-c = gaussian_state("thermal", 100)
 
 tripartite = a.tensor_product([b,c])
 
@@ -288,6 +466,12 @@ lambda_tri = tripartite.symplectic_eigenvalues()
 
 tripartite.purity()
 
-coherent = gaussian_state("coherent", 2+1j);
-coherent.purity()
+c.purity()
 
+S = c.von_Neumann_Entropy()
+
+I = tripartite.mutual_information()
+
+#nbar_th = c.occupation_number()
+
+nbar3 = tripartite.occupation_number()
