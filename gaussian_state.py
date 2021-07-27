@@ -65,11 +65,7 @@ class gaussian_state:                                                           
             raise ValueError('Unexpected arguments when creating gaussian state!') # If input arguments do not make sense, call out the user
         
         omega = np.array([[0, 1], [-1, 0]]);                                    # Auxiliar variable
-        self.Omega = np.kron(np.eye(self.N_modes,dtype=int), omega)             # Save the symplectic form matrix in a class attribute
-        
-        # for i in range(self.N_modes):                                           # Build the symplectic form
-        #     Omega = blkdiag(Omega, omega);
-        # self.Omega = Omega;                                                     
+        self.Omega = np.kron(np.eye(self.N_modes,dtype=int), omega)             # Save the symplectic form matrix in a class attribute                                                    
     
     def check_uncertainty_relation(self):
       """
@@ -207,6 +203,63 @@ class gaussian_state:                                                           
       rho_A = gaussian_state(R0, V0);
       return rho_A
 
+    # Properties of the gaussian state
+    def symplectic_eigenvalues(self):
+        """
+        Calculates the sympletic eigenvalues of a covariance matrix V with symplectic form Omega
+        
+        Finds the absolute values ofthe eigenvalues of i\Omega V and removes repeated entries
+        
+        CALCULATES:
+            lambda - array with symplectic eigenvalues
+        """  
+        H = 1j*np.matmul(self.Omega, self.V);                                   # Auxiliar matrix
+        lambda_0, v_0 = np.linalg.eig(H)
+        lambda_0 = np.abs( lambda_0 );                                          # Absolute value of the eigenvalues of the auxiliar matrix
+        
+        lambda_s = np.zeros((self.N_modes, 1));                                 # Variable to store the symplectic eigenvalues
+        for i in range(self.N_modes):                                           # Loop over the non-repeated entries of lambda_0
+            lambda_s[i] = lambda_0[0]                                         # Get the first value on the repeated array
+            lambda_0 = np.delete(lambda_0, 0)                                  # Delete it
+            
+            idx = np.argmin( np.abs(lambda_0-lambda_s[i]) )                           # Find the next closest value on the array (repeated entry)
+            lambda_0 = np.delete(lambda_0, idx)                              # Delete it too
+        
+        return lambda_s
+    
+    def purity(self):
+      """
+      Purity of a gaussian state (pure states have unitary purity)
+       
+       CALCULATES:
+           p - purity
+      """
+      
+      return 1/np.prod( self.symplectic_eigenvalues() );
+    
+    def squeezing_degree(self):
+        """
+        Degree of squeezing of the quadratures of a single mode state
+        Defined as the ratio of the variance of the squeezed and antisqueezed quadratures
+        
+        CALCULATES:
+            V_sq  - variance of the     squeezed quadrature
+            V_asq - variance of the antisqueezed quadrature
+            eta   - ratio of the variances above
+       
+        REFERENCE: 
+            Phys. Rev. Research 2, 013052 (2020)
+        """
+      
+        assert self.N_modes == 1, "At the moment, this program only calculates the squeezing degree for a single mode state"
+      
+        lambda_0, v_0 = np.linalg.eig(self.V)
+        
+        V_sq  = np.amin(lambda_0);
+        V_asq = np.amax(lambda_0);
+      
+        eta = V_sq/V_asq;
+        return eta, V_sq, V_asq
 ###############################################################################
 
 Ra = np.array([1,2])
@@ -229,11 +282,12 @@ bipartite = tripartite.partial_trace([2])
 
 single2 = tripartite.only_modes([0,2])
 
+lambda_a = a.symplectic_eigenvalues()
 
+lambda_tri = tripartite.symplectic_eigenvalues()
 
+tripartite.purity()
 
-
-
-
-
+coherent = gaussian_state("coherent", 2+1j);
+coherent.purity()
 
