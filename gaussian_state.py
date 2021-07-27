@@ -9,6 +9,9 @@ from scipy.linalg import block_diag
 from scipy.linalg import sqrtm
 from numpy.linalg import matrix_power
 
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
 class gaussian_state:                                                           # Class definning a multimode gaussian state
     # Constructor and its auxiliar functions    
     def __init__(self, *args):
@@ -366,10 +369,10 @@ class gaussian_state:                                                           
         inv_V = np.linalg.inv(self.V)
         
         for i in range(len(X)):
-            x = np.array([ [X[i,:]] , [P[i,:]] ]);   
+            x = np.block([ [X[i,:]] , [P[i,:]] ]);   
             
             for j in range(x.shape[1]):
-                dx = x[:, j] - self.R;                                          # x_mean(:,i) is the i-th point in phase space
+                dx = np.vstack(x[:, j]) - self.R;                                          # x_mean(:,i) is the i-th point in phase space
                 dx_T = np.hstack(dx)
                 
                 W_num = np.exp( - np.matmul(np.matmul(dx_T, inv_V), dx)/2 );    # Numerator
@@ -599,6 +602,11 @@ nbar3 = tripartite.occupation_number()
 
 a.fidelity(c)
 
+x = np.linspace(-10, 10, 200)
+X, P = np.meshgrid(x,x)
+W = c.wigner(X,P)
 
+fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 
-
+surf = ax.plot_surface(X, P, W, cmap=cm.coolwarm, linewidth=0, antialiased=False)
+fig.colorbar(surf, shrink=0.5)
