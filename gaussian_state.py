@@ -356,31 +356,33 @@ class gaussian_state:                                                           
            LN - logarithmic negativity for the bipartition / bipartite states
         """
         
-        temp = self.N_modes;
+        temp = self.N_modes 
         if(temp == 2):                                                          # If the full system is only comprised of two modes
-            V0 = self.V;                                                        # Take its full covariance matrix
-        elif(len(args) > 1 & temp > 2):
-            indexes = args[1]
+            V0 = self.V                                                         # Take its full covariance matrix
+        elif(len(args) > 0 & temp > 2):
+            indexes = args[0]
             
             assert len(indexes) == 2, "Can only calculate the logarithmic negativity for a bipartition!"
                 
-            bipartition = self.only_modes(indexes);                             # Otherwise, get only the two mode specified by the user
-            V0 = bipartition.V;                                                 # Take the full Covariance matrix of this subsystem
+            bipartition = self.only_modes(indexes)                              # Otherwise, get only the two mode specified by the user
+            V0 = bipartition.V                                                  # Take the full Covariance matrix of this subsystem
+        else:
+            raise TypeError('Unable to decide which bipartite entanglement to infer, please pass the indexes to the desired bipartition')
         
-        A = V0(0:2, 0:2);                                                       # Make use of its submatrices
-        B = V0(2:4, 2:4);
-        C = V0(0:2, 2:4);
+        A = V0[0:2, 0:2]                                                        # Make use of its submatrices
+        B = V0[2:4, 2:4] 
+        C = V0[0:2, 2:4] 
         
-        sigma = det(A) + det(B) - 2.0*det(C);                                   # Auxiliar variable
+        sigma = np.linalg.det(A) + np.linalg.det(B) - 2.0*np.linalg.det(C)      # Auxiliar variable
         
-        ni = sigma/2.0 - sqrt( sigma^2 - 4.0*det(V0) )/2.0 ;                    # Square of the smallest of the symplectic eigenvalues of the partially transposed covariance matrix
+        ni = sigma/2.0 - np.sqrt( sigma**2 - 4.0*np.linalg.det(V0) )/2.0 ;      # Square of the smallest of the symplectic eigenvalues of the partially transposed covariance matrix
         
-        if ni < 0.0                                                             # Manually perform a maximum to save computational time (calculation of a sqrt can take too much time and deal with residual numeric imaginary parts)
+        if(ni < 0.0):                                                           # Manually perform a maximum to save computational time (calculation of a sqrt can take too much time and deal with residual numeric imaginary parts)
             LN = 0.0;
-        else
-            ni = sqrt( real(ni) );                                              # Smallest of the symplectic eigenvalues of the partially transposed covariance matrix
+        else:
+            ni = np.sqrt( ni.real );                                            # Smallest of the symplectic eigenvalues of the partially transposed covariance matrix
         
-        LN = max([0, -log(ni)]);                                                # Calculate the logarithmic negativity at each time
+        LN = np.max([0, -np.log(ni)]);                                          # Calculate the logarithmic negativity at each time
         return LN
     
     # Gaussian unitaries
@@ -474,7 +476,7 @@ class gaussian_state:                                                           
         self.R = np.matmul(S2, self.R);
         self.V = np.matmul( np.matmul(S2, self.V), S2_T)
     
-    # Wigner, Fidelity, log. neg.
+    # Wigner, Fidelity
     
 ###############################################################################
 
