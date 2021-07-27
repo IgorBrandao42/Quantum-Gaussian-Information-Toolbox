@@ -6,6 +6,8 @@ Created on Tue Jul 27 09:57:16 2021
 """
 import numpy as np
 from scipy.linalg import block_diag
+from scipy.linalg import sqrtm
+from numpy.linalg import matrix_power
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
     # Constructor and its auxiliar functions    
@@ -343,6 +345,39 @@ class gaussian_state:                                                           
         C = temp - S_total;                                                     # Calculation of the mutual information
         return C
     
+    def wigner(self, X, P):
+        """
+        Calculates the wigner function for a single mode gaussian state
+       
+        PARAMETERS
+            X, P - 2D grid where the wigner function is to be evaluated (use meshgrid)
+        
+        CALCULATES:
+            W - array with Wigner function over the input 2D grid
+        """
+        
+        assert self.N_modes == 1, "At the moment, this program only calculates the wigner function for a single mode state"
+        
+        N = self.N_modes;                                                       # Number of modes
+        W = np.zeros((len(X), len(P)));                                         # Variable to store the calculated wigner function
+        
+        one_over_purity = 1/self.purity();
+        
+        inv_V = np.linalg.inv(self.V)
+        
+        for i in range(len(X)):
+            x = np.array([ [X[i,:]] , [P[i,:]] ]);   
+            
+            for j in range(x.shape[1]):
+                dx = x[:, j] - self.R;                                          # x_mean(:,i) is the i-th point in phase space
+                dx_T = np.hstack(dx)
+                
+                W_num = np.exp( - np.matmul(np.matmul(dx_T, inv_V), dx)/2 );    # Numerator
+                
+                W_den = (2*np.pi)**N * one_over_purity;                         # Denominator
+          
+                W[i, j] = W_num/W_den;                                          # Calculate the wigner function at every point on the grid
+        return W
     
     def logarithmic_negativity(self, *args):
         """
@@ -385,6 +420,51 @@ class gaussian_state:                                                           
         LN = np.max([0, -np.log(ni)]);                                          # Calculate the logarithmic negativity at each time
         return LN
     
+    def fidelity(self, rho_2):
+        """
+        Calculates the fidelity between the two arbitrary gaussian states
+        
+        ARGUMENTS:
+            rho_1, rho_2 - gaussian states to be compared through fidelity
+         
+        CALCULATES:
+            F - fidelity between rho_1 and rho_2
+        
+        REFERENCE:
+            Phys. Rev. Lett. 115, 260501.
+       
+        OBSERVATION:
+        The user should note that non-normalized quadratures are expected;
+        They are normalized to be in accordance with the notation of Phys. Rev. Lett. 115, 260501.
+        """
+      
+        assert self.N_modes == rho_2.N_modes, "Impossible to calculate the fidelity between gaussian states of diferent sizes!" 
+        
+        u_1 = self.R/np.sqrt(2.0);                                              # Normalize the mean value of the quadratures
+        u_2 = rho_2.R/np.sqrt(2.0);
+        
+        V_1 = self.V/2.0;                                                       # Normalize the covariance matrices
+        V_2 = rho_2.V/2.0;
+        
+        OMEGA = self.Omega;
+        OMEGA_T = np.transpose(OMEGA)
+        
+        delta_u = u_2 - u_1;                                                    # A bunch of auxiliar variables
+        delta_u_T = np.hstack(delta_u)
+        
+        inv_V = np.linalg.inv(V_1 + V_2);
+        
+        V_aux = np.matmul( np.matmul(OMEGA_T, inv_V), OMEGA/4 + np.matmul(np.matmul(V_2, OMEGA), V_1) )
+        
+        identity = np.identity(2*self.N_modes);
+        
+        F_tot_4 = np.linalg.det( 2*np.matmul(sqrtm(identity + matrix_power(np.matmul(V_aux,OMEGA),-2)/4) + identity, V_aux) );
+        
+        F_0 = (F_tot_4.real / np.linalg.det(V_1+V_2))**(1.0/4.0);               # We take only the real part of F_tot_4 as there can be a residual complex part from numerical calculations!
+        
+        F = F_0*np.exp( -np.matmul(np.matmul(delta_u_T,inv_V), delta_u)  / 4);                        # Fidelity
+        return F
+  
     # Gaussian unitaries
     # Applicable to single mode states
     def displace(self, alpha):
@@ -517,7 +597,7 @@ I = tripartite.mutual_information()
 
 nbar3 = tripartite.occupation_number()
 
-
+a.fidelity(c)
 
 
 
