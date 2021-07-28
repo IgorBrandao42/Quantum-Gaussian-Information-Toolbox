@@ -7,63 +7,48 @@ Author: Igor Brandão
 Contact: igorbrandao@aluno.puc-rio.br
 """
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import cm
-
-import types
 
 from gaussian_state import gaussian_state
 
-a = gaussian_state("thermal", 100)
+# Creation of many different state
+thermal = gaussian_state("thermal", 100)
 
-b = gaussian_state("squeezed", 1.2)
-b.displace(2 + 5j)
+squeezed = gaussian_state("squeezed", 1.2)
+squeezed.displace(2 + 5j)
 
-b.tensor_product([b])
-bb = b.tensor_product([b])
-bb.two_mode_squeezing(0.5)
+coherent = gaussian_state("coherent", 2+1j);
+coherent.rotate(np.pi/6)
 
-b = bb.partial_trace([1])
+bipartite = squeezed.tensor_product([thermal])
+bipartite.two_mode_squeezing(1.5)
 
-c = gaussian_state("coherent", 2+1j);
+partition = bipartite.partial_trace([1])
 
-tripartite = a.tensor_product([b,c])
+tripartite = thermal.tensor_product([squeezed, coherent])
 
-single = tripartite.partial_trace([0,2])
+bipartition = tripartite.only_modes([0,2])
 
-bipartite = tripartite.partial_trace([2])
 
-single2 = tripartite.only_modes([0,2])
-
-lambda_a = a.symplectic_eigenvalues()
+# Retrieval of information from the gaussian states
+lambda_thermal = thermal.symplectic_eigenvalues()
 
 lambda_tri = tripartite.symplectic_eigenvalues()
 
-tripartite.purity()
+p_tri = tripartite.purity()
 
-c.purity()
+p_coherent = coherent.purity()
 
-S = c.von_Neumann_Entropy()
+S = thermal.von_Neumann_Entropy()
 
 I = tripartite.mutual_information()
 
-nbar_th = c.occupation_number()
+nbar_th = thermal.occupation_number()
 
 nbar_3 = tripartite.occupation_number()
 
-F_ac = a.fidelity(c)
+F_ac = coherent.fidelity(squeezed)
 
-x = np.linspace(-10, 10, 200)
-X, P = np.meshgrid(x,x)
 
-c.squeeze(1)
-c.rotate(np.pi/2)
-W = c.wigner(X,P)
-
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-
-surf = ax.plot_surface(X, P, W, cmap=cm.coolwarm, linewidth=0, antialiased=False)
-fig.colorbar(surf, shrink=0.5)
 
 
 
