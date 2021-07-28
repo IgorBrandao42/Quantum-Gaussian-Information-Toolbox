@@ -8,6 +8,7 @@ Contact: igorbrandao@aluno.puc-rio.br
 """
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.linalg import solve_continuous_lyapunov
 import types
 
 def is_lambda_function(obj):
@@ -197,125 +198,123 @@ class time_evolution:
         for i in range(self.N_time):
             self.state.append( gaussian_state(self.R[:, i], self.V[i]) );
         
-    
-    function ss = steady_state(self, A_0, A_c, A_s, omega)
-      # Calculates the steady state for the system
-      #
-      # PARAMETERS:
-      #   self   - class instance
-      # 
-      #   The next parameters are only necessary if the drift matrix has a time dependency (and it is periodic)
-      #   A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
-      #   omega - Frequency of the drift matrix
-      # 
-      # CALCULATES:
-      #   self.steady_state_internal with the steady state (gaussian_state)
-      #   ss - gaussian_state with steady state of the system
-      
-      if ~isa(self.A, 'numeric')                  # If the Langevin and Lyapunov eqs. have a time dependency, move to the Floquet solution
-        ss = self.floquet(A_0, A_c, A_s, omega);
-        self.steady_state_internal = ss;
-      else                                       # If the above odes are time independent, 
-        assert(self.is_stable, "There is no steady state covariance matrix, as the system is not stable!"); # Check if there exist a steady state!
+    def steady_state(self, A_0, A_c, A_s, omega):
+        """
+        Calculates the steady state for the system
+       
+        PARAMETERS:
+          self   - class instance
         
-        R_ss = linsolve(self.A, -self.N);          # Calculate steady-state mean quadratures
-        V_ss = lyap(self.A, self.D);               # Calculate steady-state covariance matrix
+          The next parameters are only necessary if the drift matrix has a time dependency (and it is periodic)
+          A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
+          omega - Frequency of the drift matrix
+        
+        CALCULATES:
+          self.steady_state_internal with the steady state (gaussian_state)
+          ss - gaussian_state with steady state of the system
+        """
+      
+        if is_lambda_function(self.A):                                          # If the Langevin and Lyapunov eqs. have a time dependency, move to the Floquet solution
+            ss = self.floquet(A_0, A_c, A_s, omega);
+            self.steady_state_internal = ss;
+        else :                                                                  # If the above odes are time independent, 
+            assert self.is_stable, "There is no steady state covariance matrix, as the system is not stable!"  # Check if there exist a steady state!
+        
+        R_ss = np.linalg.solve(self.A, -self.N);                                # Calculate steady-state mean quadratures
+        V_ss = solve_continuous_lyapunov(self.A, -self.D);                      # Calculate steady-state covariance matrix
+        
+        self.steady_state_internal = gaussian_state(R_ss, V_ss);                # Generate the steady state
+        ss = self.steady_state_internal;                                        
+        return ss                                                               # Return the gaussian_state with the steady state for this system
+        return ss
+    
+    def floquet(self, A_0, A_c, A_s, omega):
+        """
+        Calculates the staeady state of a system with periodic Hamiltonin/drift matrix
+        Uses first order approximation in Floquet space for this calculation
+       
+        Higher order approximations will be implemented in the future
+        
+        PARAMETERS:
+          self   - class instance
+        
+          A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
+          omega - Frequency of the drift matrix
+        
+        CALCULATES:
+          self.steady_state_internal with the steady state (gaussian_state)
+          ss - gaussian_state with steady state of the system
+        """
+      
+        M = self.Size_matrices;                                                 # Size of the time-dependent matrix
+        Id = np.identity(M);                                                    # Identity matrix for the system size
+        
+        A_F = np.block([[A_0,    A_c   ,     A_s  ],
+                        [A_c,    A_0   , -omega*Id],
+                        [A_s, +omega*Id,     A_0  ]])                           # Floquet drift     matrix
+        
+        D_F = np.kron(np.eye(3,dtype=int), self.D)                              # Floquet diffusion matrix
+        
+        N_F = np.vstack([self.N, self.N, self.N])                               # Floquet mean noise vector
+        
+        R_ss_F = np.linalg.solve(A_F, -N_F);                                    # Calculate steady-state Floquet mean quadratures vector
+        V_ss_F = solve_continuous_lyapunov(A_F, -D_F);                          # Calculate steady-state Floquet covariance matrix
+        
+        R_ss = R_ss_F[1:M];                                                     # Get only the first entries
+        V_ss = V_ss_F[1:M, 1:M];                                                # Get only the first sub-matrix
         
         self.steady_state_internal = gaussian_state(R_ss, V_ss); # Generate the steady state
-        ss = self.steady_state_internal;          #
-      end
-    end
+        ss = self.steady_state_internal; 
+        return ss
     
-    function ss = floquet(self, A_0, A_c, A_s, omega)
-      # Calculates the staeady state of a system with periodic Hamiltonin/drift matrix
-      # Uses first order approximation in Floquet space for this calculation
-      #
-      # Higher order approximations will be implemented in the future
-      # 
-      # PARAMETERS:
-      #   self   - class instance
-      # 
-      #   A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
-      #   omega - Frequency of the drift matrix
-      # 
-      # CALCULATES:
-      #   self.steady_state_internal with the steady state (gaussian_state)
-      #   ss - gaussian_state with steady state of the system
+    def langevin_semi_classical(self, t_span, N_ensemble=2e+2):
+        """
+        Solve the semi-classical Langevin equation for the expectation value of the quadrature operators
+        using a Monte Carlos simulation to numericaly integrate the Langevin equations
+        
+        The initial conditions follows the initial state probability density in phase space
+        The differential stochastic equations are solved through a Euler-Maruyama method
+       
+        PARAMETERS:
+          self   - class instance
+          N_ensemble (optional) - number of iterations for Monte Carlos simulation, default value: 200
+       
+        CALCULATES:
+          self.R_semi_classical - matrix with the quadratures expectation values of the time evolved system where 
+          self.R_semi_classical(i,j) is the i-th quadrature expectation value at the j-th time
+        """
       
-      M = self.Size_matrices;                     # Size of the time-dependent matrix
-      Id = eye(M);                               # Identity matrix for the system size
+        self.t = t_span;                                                        # Timestamps for the simulation
+        self.N_time = len(t_span);                                              # Number of timestamps
+        
+        dt = self.t(2) - self.t(1);                                             # Time step
+        sq_dt =  np.sqrt(dt);                                                   # Square root of time step (for Wiener proccess in the stochastic integration)
+        
+        noise_amplitude = self.N + np.sqrt( np.diag(self.D) );                  # Amplitude for the noises (square root of the auto correlations)
+        
+        mean_0 = self.initial_state.R;                                          # Initial mean value
+        std_deviation_0 =  np.sqrt( np.diag(self.initial_state.V) );            # Initial standard deviation
+        
+        self.R_semi_classical = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
+        
+        if is_lambda_function(self.A):                                          # I have to check if there is a time_dependency on the odes
+            AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
+        else:
+            AA = lambda t: self.A;                                              # If A is does not vary in time, the new function always returns the same value 
       
-      A_F = [[A_0,    A_c   ,     A_s  ];
-             [A_c,    A_0   , -omega*Id];
-             [A_s, +omega*Id,     A_0  ]];       # Floquet drift     matrix
+        for i in range(N_ensemble):                                             # Loop on the random initial positions (# Monte Carlos simulation using Euler-Maruyama method in each iteration)
+            
+            X = np.zeros((self.Size_matrices, self.N_time));                    # For this iteration, this matrix stores each quadrature at each time (first and second dimensions, respectively)
+            X[:,1] = np.random.normal(mean_0, std_deviation_0)                  # Initial Cavity position quadrature (normal distribution for vacuum state)
+            
+            noise = np.random.standard_normal(X.shape);
+            for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration
+                X[:,k+1] = X[:,k] + np.matmul(AA(self.t[k]), X[:,k])*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
+                                   
+            self.R_semi_classical = self.R_semi_classical + X;                      # Add the new  Monte Carlos iteration quadratures to the same matrix
+        
+        self.R_semi_classical = self.R_semi_classical/N_ensemble;                 # Divide the ensemble sum to obtain the average quadratures at each time
       
-      D_F = blkdiag(self.D, self.D, self.D);        # Floquet diffusion matrix
-      
-      N_F = repmat(self.N, 3, 1);                 # Floquet mean noise vector
-      
-      R_ss_F = linsolve(A_F, -N_F);              # Calculate steady-state Floquet mean quadratures vector
-      V_ss_F = lyap(A_F, D_F);                   # Calculate steady-state Floquet covariance matrix
-      
-      R_ss = R_ss_F(1:M);                        # Get only the first entries
-      V_ss = V_ss_F(1:M, 1:M);                   # Get only the first sub-matrix
-      
-      self.steady_state_internal = gaussian_state(R_ss, V_ss); # Generate the steady state
-      ss = self.steady_state_internal; 
-    end
+        # fprintf("Langevin simulation ended\n")                                  # Warn user that heavy calculation started
     
-    function langevin_semi_classical(self, t_span, N_ensemble)
-      # Solve the semi-classical Langevin equation for the expectation value of the quadrature operators
-      # using a Monte Carlos simulation to numericaly integrate the Langevin equations
-      # 
-      # The initial conditions follows the initial state probability density in phase space
-      # The differential stochastic equations are solved through a Euler-Maruyama method
-      #
-      # PARAMETERS:
-      #   self   - class instance
-      #   N_ensemble (optional) - number of iterations for Monte Carlos simulation, default value: 200
-      #
-      # CALCULATES:
-      #   self.R_semi_classical - matrix with the quadratures expectation values of the time evolved system where 
-      #   self.R_semi_classical(i,j) is the i-th quadrature expectation value at the j-th time
-      
-      self.t = t_span;                                      # Timestamps for the simulation
-      self.N_time = length(t_span);                         # Number of timestamps
-      
-      if nargin < 3
-        N_ensemble = 2e+2;                                 # Number of Monte Carlos iterations
-      end
-      
-      dt = self.t(2) - self.t(1);                            # Time step
-      sq_dt = sqrt(dt);                                    # Square root of time step (for Wiener proccess in the stochastic integration)
-      
-      noise_amplitude = self.N + sqrt(diag(self.D));         # Amplitude for the noises (square root of the auto correlations)
-      
-      mean_0 = self.initial_state.R;                        # Initial mean value
-      std_deviation_0 = sqrt(diag(self.initial_state.V));   # Initial standard deviation
-      
-      self.R_semi_classical = zeros([self.Size_matrices, self.N_time]); # Matrix to store each quadrature ensemble average at each time
-      
-      if isa(self.A,'function_handle')                      # I have to check if there is a time_dependency on the odes
-        AA = @(t) self.A(t);                                # Rename the function that calculates the drift matrix at each time
-      else
-        AA = @(t) self.A;                                   # If A is does not vary in time, the new function always returns the same value 
-      end
-      
-      for i=1:N_ensemble                                   # Loop on the random initial positions (# Monte Carlos simulation using Euler-Maruyama method in each iteration)
-        
-        X = zeros([self.Size_matrices, self.N_time]);        # For this iteration, this matrix stores each quadrature at each time (first and second dimensions, respectively)
-        X(:,1) = normrnd(mean_0, std_deviation_0);         # Initial Cavity position quadrature (normal distribution for vacuum state)
-        
-        noise = randn(size(X));
-        for k = 1:self.N_time-1                             # Euler-Maruyama method for stochastic integration
-          X(:,k+1) = X(:,k) + AA(self.t(k))*X(:,k)*dt + sq_dt*noise_amplitude.*noise(:,k);
-        end                                                # loop on time
-        
-        self.R_semi_classical = self.R_semi_classical + X;   # Add the new  Monte Carlos iteration quadratures to the same matrix
-      end                                                  # loop on each Monte Carlos realization
-      
-      self.R_semi_classical = self.R_semi_classical/N_ensemble; # Divide the ensemble sum to obtain the average quadratures at each time
-      
-      # fprintf("Langevin simulation ended\n")             # Warn user that heavy calculation started
-    end
     
