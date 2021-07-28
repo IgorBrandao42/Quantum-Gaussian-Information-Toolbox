@@ -12,25 +12,31 @@ from scipy.linalg import sqrtm
 from numpy.linalg import matrix_power
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
+    """
+    Class simulation of a multimode gaussian state
+    
+    ATRIBUTES:
+        self.R       - Mean quadratures vector
+        self.V       - Covariance matrix
+        self.Omega   - Symplectic form matrix
+        self.N_modes - Number of modes
+    """    
+    
     # Constructor and its auxiliar functions    
     def __init__(self, *args):
         """
-        Class simulating a gaussian state with mean quadratures and covariance matrix
+        Constructor for a class instance simulating a gaussian state 
+        with mean quadratures and covariance matrix
         
         The user can explicitly pass the first two moments of a multimode gaussian state
         or pass a name-value pair argument to choose a single mode gaussian state
         
-        ATRIBUTES:
-        self.R       - Mean quadratures
-        self.V       - Covariance matrix
-        self.Omega   - Symplectic form matrix
-        self.N_modes - Number of modes
-        
         PARAMETERS:
-          R0 - mean quadratures for gaussian state
-          V0 - covariance matrix for gaussian state
-          Alternatively, the user may pass a name-value pair argument 
-          to create an elementary single mode gaussian state, see below.
+            R0 - mean quadratures for gaussian state
+            V0 - covariance matrix for gaussian state
+            
+        Alternatively, the user may pass a name-value pair argument 
+        to create an elementary single mode gaussian state, see below.
         
         NAME-VALUE PAIR ARGUMENTS:
           "vacuum"                        - generates vacuum   state
@@ -47,7 +53,7 @@ class gaussian_state:                                                           
         elif( isinstance(args[0], str) ):                                       # If the user called for an elementary gaussian state
             self.decide_which_state(args)                                       # Call the proper method to decipher which state the user wants 
         
-        elif(isinstance(args[0], np.ndarray) & isinstance(args[1], np.ndarray)): # If the user gave the desired mean quadratures values and covariance matrix
+        elif(isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray)): # If the user gave the desired mean quadratures values and covariance matrix
             R0 = args[0];
             V0 = args[1];
             
@@ -59,7 +65,7 @@ class gaussian_state:                                                           
             
             R_and_V_match = len(R0) == len(V0)
             
-            assert R_is_real & R_is_vector & V_is_matrix & R_and_V_match & V_is_square, "Unexpected first moments when creating gaussian state!"  # Make sure they are a vector and a matrix with same length
+            assert R_is_real and R_is_vector and V_is_matrix and R_and_V_match and V_is_square, "Unexpected first moments when creating gaussian state!"  # Make sure they are a vector and a matrix with same length
         
             self.R = np.vstack(R0);                                             # Save mean quadratres   in a class attribute (vstack to ensure column vector)
             self.V = V0;                                                        # Save covariance matrix in a class attribute
@@ -120,7 +126,8 @@ class gaussian_state:                                                           
         else:
             self.N_modes = [];
             raise ValueError("Unrecognized gaussian state name, please check for typos or explicitely pass its first moments as arguments")
-
+    
+    
     # Construct another state, from this base gaussian_state
     def tensor_product(self, rho_list):
         """ Given a list of gaussian states, 
@@ -191,7 +198,7 @@ class gaussian_state:                                                           
       """
       
       N_A = len(indexes);                                                       # Twice the number of modes in resulting state
-      assert N_A>0 & N_A <= self.N_modes, "Partial trace over more states than exists in gaussian state"
+      assert N_A>0 and N_A <= self.N_modes, "Partial trace over more states than exists in gaussian state"
       
       R0 = np.zeros((2*N_A, 1))
       V0 = np.zeros((2*N_A, 2*N_A))
@@ -206,7 +213,8 @@ class gaussian_state:                                                           
       
       rho_A = gaussian_state(R0, V0);
       return rho_A
-
+    
+    
     # Properties of the gaussian state
     def symplectic_eigenvalues(self):
         """
@@ -396,7 +404,7 @@ class gaussian_state:                                                           
         temp = self.N_modes 
         if(temp == 2):                                                          # If the full system is only comprised of two modes
             V0 = self.V                                                         # Take its full covariance matrix
-        elif(len(args) > 0 & temp > 2):
+        elif(len(args) > 0 and temp > 2):
             indexes = args[0]
             
             assert len(indexes) == 2, "Can only calculate the logarithmic negativity for a bipartition!"
@@ -466,9 +474,9 @@ class gaussian_state:                                                           
         
         F = F_0*np.exp( -np.matmul(np.matmul(delta_u_T,inv_V), delta_u)  / 4);                        # Fidelity
         return F
-  
-    # Gaussian unitaries
-    # Applicable to single mode states
+    
+    
+    # Gaussian unitaries (applicable to single mode states)
     def displace(self, alpha):
         """
         Apply displacement operator on a single mode gaussian state
@@ -500,8 +508,7 @@ class gaussian_state:                                                           
         
         self.R = np.matmul(S, self.R);
         self.V = np.matmul( np.matmul(S,self.V), S);
-    
-    
+        
     def rotate(self, theta):
         """
         Apply phase rotation on a single mode gaussian state
@@ -518,7 +525,8 @@ class gaussian_state:                                                           
         self.R = np.matmul(Rot, self.R);
         self.V = np.matmul( np.matmul(Rot, self.V), Rot_T);
     
-    # Two mode states
+    
+    # Gaussian unitaries (applicable to two mode states)
     def beam_splitter(self, tau):
         """
         Apply a beam splitter transformation in a gaussian state
@@ -558,14 +566,6 @@ class gaussian_state:                                                           
         self.R = np.matmul(S2, self.R);
         self.V = np.matmul( np.matmul(S2, self.V), S2_T)
     
-
-
-
-
-
-
-
-
 
 
 
