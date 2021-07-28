@@ -8,49 +8,62 @@ The README below is not complete, but for the moment you can refer to the [docum
 
 ## Installation
 
-Clone this repository or download this Toolbox and add its main folder to the MATLAB path:
+Clone this repository or download this Toolbox to your project folder and import the two main classes for this toolbox:
 
-```MATLAB
-addpath('<download-path>/<name-folder>');
+```python
+from gaussian_state import gaussian_state
+from gaussian_dynamics import gaussian_dynamics
 ```
 
 ## Usage
  Creation of gaussian states
 
 ```MATLAB
-nbar_0   = 1.0577e+05;                             % Initial particle occupation number
-thermal_state = gaussian_state("thermal", nbar_0); % Initial state
-thermal_state.squeeze(3);                          % Apply squeezing operator to gaussian state
+import numpy as np
+from gaussian_state import gaussian_state
+from gaussian_dynamics import gaussian_dynamics
 
-R = [10, 5];                                       % Mean quadrature vector
-V = [[1, 0];                                       % Covariance matrix
-     [0, 1]];
+nbar_0   = 1.0577e+05;                             # Initial particle occupation number
+thermal_state = gaussian_state("thermal", nbar_0); # Initial state
+thermal_state.squeeze(3);                          # Apply squeezing operator to gaussian state
+
+R = np.array([10, 5])                              # Mean quadrature vector
+V = np.array([[1, 0],                              # Covariance matrix
+              [0, 1]])
+              
 generic_state = gaussian_state(R, V);
 
-bipartite_state = thermal.tensor_product(generic_state); % Create bipartite gaussian state
+bipartite_state = thermal.tensor_product(generic_state); # Create bipartite gaussian state
 ```
 
 Calculation of time evolution:
-```MATLAB
-omega = 2*pi*197e+3;                           % Particle natural frequency [Hz]
-gamma = 2*pi*881.9730;                         % Damping constant [Hz] at 1.4 mbar pressure
-nbar_env = 3.1731e+07;                         % Environmental    occupation number
+```python
+import numpy as np
+from gaussian_state import gaussian_state
+from gaussian_dynamics import gaussian_dynamics
 
-A =[[    0   ,  +omega ];                      % Drift matrix for harmonic potential
-    [ -omega ,  -gamma ]];
+omega = 2*pi*197e+3                            # Particle natural frequency [Hz]
+gamma = 2*pi*881.9730                          # Damping constant [Hz] at 1.4 mbar pressure
+nbar_env = 3.1731e+07                          # Environmental    occupation number
+
+A = np.block([[    0   ,  +omega ]             # Drift matrix for harmonic potential
+              [ -omega ,  -gamma ]]) 
         
-D = diag([0, 2*gamma*(2*nbar_env+1)]);         % Diffusion matrix
-N = zeros(2,1);                                % Mean noise vector
+D = np.diag([0, 2*gamma*(2*nbar_env+1)])       # Diffusion matrix
+N = np.zeros((2,1))                            # Mean noise vector
 
-initial_state = generic_state;                 % Change of notation for clarity!
-t = linspace(0, 2*pi/omega, 1e4);              % Timestamps for simulation
+alpha = 1 + 2j                                 # Coherent state amplitude
+initial_state = gaussian_state("coherent",alpha) # Initial state
 
-simulation = time_evolution(A, D, N, initial_state); % Create simulation instance!
-states = simulation.run(t);                    % Simulate and retrieve time evolved states (array of gaussian_state instances)   
+t = linspace(0, 2*pi/omega, 1e4);              # Timestamps for simulation
+simulation = gaussian_dynamics(A, D, N, initial_state); # Create simulation instance!
+states = simulation.run(t);                    # Simulate and retrieve time evolved states (array of gaussian_state instances)   
 ```
 
 #### Running Example
-In the file **Example_simulation.m** there is a basic example of the capabilities of this Toolbox.
+In the file **Example_gaussian_state.py** there is a basic example of the capabilities of this Toolbox to simulate a multimode gaussian state and retrieve information from it.
+
+In the file **Example_gaussian_dynamics.py** there is a basic example of the capabilities of this Toolbox to simulate the time evolution of multimode gaussian state following closed/open quantum dynamics through a set of quantum Langevin and Lyapunov equations.
 
 ## Author
 [Igor Brandão](mailto:igorbrandao@aluno.puc-rio.br) - M.Sc. in Physics from Pontifical Catholic University of Rio de Janeiro, Brazil. Advisor: [Thiago Guerreiro](mailto:barbosa@puc-rio.br)
@@ -68,7 +81,7 @@ Cite this toolbox as:
 
 
 ## Acknowledgment
-The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for the discussions. The author is thankful for support received from FAPERJ Scholarship No. E-26/200.270/2020
+The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for the discussions. The author is thankful for support received from FAPERJ Scholarship No. E-26/200.270/2020 and CNPq Scholarship No. 140279/2021-0.
 
 
 
