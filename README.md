@@ -1,4 +1,4 @@
-# Quantum Gaussian Information Numerical Toolbox
+# Gaussian Quantum Information Numerical Toolbox (Python)
 
 This is a Python Toolbox for numerical simulation of quantum gaussian states and their dynamics dictated by a set of linear Langevin and Lyapunov equations
 
