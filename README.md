@@ -55,7 +55,7 @@ N = np.zeros((2,1))                            # Mean noise vector
 alpha = 1 + 2j                                 # Coherent state amplitude
 initial_state = gaussian_state("coherent",alpha) # Initial state
 
-t = linspace(0, 2*pi/omega, 1e4);              # Timestamps for simulation
+t = linspace(0, 2*pi/omega, 1000);              # Timestamps for simulation
 simulation = gaussian_dynamics(A, D, N, initial_state); # Create simulation instance!
 states = simulation.run(t);                    # Simulate and retrieve time evolved states (array of gaussian_state instances)   
 ```
