@@ -6,6 +6,10 @@ For the full description and notation used for gaussian quantum states, please r
 
 The README below is not complete, but for the moment you can refer to the [documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf)!
 
+## Dependencies
+
+This toolbox makes use of the numpy and scipy packages.
+
 ## Installation
 
 Clone this repository or download this Toolbox to your project folder and import the toolbox:
