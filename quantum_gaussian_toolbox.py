@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jul 30 14:30:23 2021
+Class simulating the time evolution of a gaussian state
+Github: https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python
 
-@author: igorb
+Author: Igor Brandão
+Contact: igorbrandao@aluno.puc-rio.br
 """
 
 
