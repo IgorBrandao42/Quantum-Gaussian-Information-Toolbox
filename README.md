@@ -8,11 +8,10 @@ The README below is not complete, but for the moment you can refer to the [docum
 
 ## Installation
 
-Clone this repository or download this Toolbox to your project folder and import the two main classes for this toolbox:
+Clone this repository or download this Toolbox to your project folder and import the toolbox:
 
 ```python
-from gaussian_state import gaussian_state
-from gaussian_dynamics import gaussian_dynamics
+from quantum_gaussian_toolbox import *
 ```
 
 ## Usage
