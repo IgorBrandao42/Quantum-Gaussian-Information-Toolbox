@@ -8,7 +8,7 @@ Contact: igorbrandao@aluno.puc-rio.br
 """
 import numpy as np
 
-from gaussian_state import gaussian_state
+from quantum_gaussian_toolbox import *
 
 # Creation of many different state
 thermal = gaussian_state("thermal", 100)
@@ -48,7 +48,7 @@ nbar_3 = tripartite.occupation_number()
 
 F_ac = coherent.fidelity(squeezed)
 
-
+C_squeezed = squeezed.coherence()
 
 
 

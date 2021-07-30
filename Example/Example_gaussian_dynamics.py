@@ -6,13 +6,13 @@ Github: https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-
 Author: Igor Brandão
 Contact: igorbrandao@aluno.puc-rio.br
 """
-import numpy as np
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation 
 from matplotlib import cm
 
-from gaussian_state import gaussian_state
-from gaussian_dynamics import gaussian_dynamics
+import numpy as np
+from quantum_gaussian_toolbox import *
 
 # Parameters
 omega = 2*np.pi*305e+3;                                                         # Particle natural frequency [Hz]
@@ -53,18 +53,18 @@ W = states[0].wigner(X, P);
 im = plt.imshow(W, cmap=cm.coolwarm, interpolation='nearest', origin='lower', extent=[-800,800,-800,800])
 #fig.colorbar(im, shrink=0.5)
 
-def draw_fig(i):
-    W = states[i].wigner(X, P);
-    # surf = ax.plot_surface(X, P, W, cmap=cm.coolwarm, linewidth=0, antialiased=False)
-    im.set_array(W)
-    #surf = plt.imshow(W, cmap=cm.coolwarm, interpolation='nearest', origin='lower', extent=[-800,800,-800,800])
-    print(i)
-    return [im]
+# def draw_fig(i):
+#     W = states[i].wigner(X, P);
+#     # surf = ax.plot_surface(X, P, W, cmap=cm.coolwarm, linewidth=0, antialiased=False)
+#     im.set_array(W)
+#     #surf = plt.imshow(W, cmap=cm.coolwarm, interpolation='nearest', origin='lower', extent=[-800,800,-800,800])
+#     print(i)
+#     return [im]
 
-# call the animator	 
-anim = animation.FuncAnimation(fig, draw_fig, frames=100, interval=20, blit=True) 
+# # call the animator	 
+# anim = animation.FuncAnimation(fig, draw_fig, frames=100, interval=20, blit=True) 
 
-# save the animation as mp4 video file 
-anim.save('gaussian_dynamics_test.gif',writer='imagemagick')
+# # save the animation as mp4 video file 
+# anim.save('gaussian_dynamics_test.gif',writer='imagemagick')
 
 
