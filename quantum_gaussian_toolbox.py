@@ -14,7 +14,7 @@ from scipy.linalg import solve_continuous_lyapunov
 from scipy.linalg import block_diag
 from scipy.linalg import sqrtm
 from numpy.linalg import matrix_power
-import types
+#import types
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
     """
@@ -571,11 +571,11 @@ class gaussian_state:                                                           
         self.R = np.matmul(S2, self.R);
         self.V = np.matmul( np.matmul(S2, self.V), S2_T)
    
-def is_lambda_function(obj):
+def is_a_function(maybe_a_function):
     """
     Auxiliar internal function checking if a given variable is a lambda function
     """
-    return isinstance(obj, types.LambdaType) and obj.__name__ == "<lambda>"
+    return callable(maybe_a_function)                   # OLD: isinstance(obj, types.LambdaType) and obj.__name__ == "<lambda>"
 
 def lyapunov_ode(t, V_old_vector, A, D):
     """
@@ -648,7 +648,7 @@ class gaussian_dynamics:
       
         # assert 2*initial_state_0.N_modes == self.Size_matrices), "Initial state's number of modes does not match the drift and diffusion matrices sizes"              # Check if the initial state and diffusion/drift matrices have appropriate sizes !
       
-        if( not is_lambda_function(self.A) ):
+        if( not is_a_function(self.A) ):
             eigvalue, eigvector = np.linalg.eig(self.A);                        # Calculate the eigenvalues of the drift matrix
             is_not_stable = np.any( eigvalue.real > 0 );                        # Check if any eigenvalue has positive real part (unstability)
             self.is_stable = not is_not_stable                                  # Store the information of the stability of the system in a class attribute
@@ -692,8 +692,8 @@ class gaussian_dynamics:
         self.t = t_span;                                                        # Timestamps for the simulation
         self.N_time = len(t_span);                                              # Number of timestamps
         
-        if is_lambda_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
-            langevin_ode = lambda t, R: np.matmul(self.A(t), R.reshape((len(R),1))) + self.N        # Function handle that defines the Langevin equation (returns the derivative)
+        if is_a_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
+            langevin_ode = lambda t, R: np.reshape(np.matmul(self.A(t), R.reshape((len(R),1))) + self.N, (len(R),))        # Function handle that defines the Langevin equation (returns the derivative)
         else:
             langevin_ode = lambda t, R: np.reshape(np.matmul(self.A, np.reshape(R, (len(R),1))) + self.N, (len(R),))           # Function handle that defines the Langevin equation (returns the derivative)
         
@@ -728,7 +728,7 @@ class gaussian_dynamics:
         
         V_0_vector = np.reshape(self.initial_state.V, (self.Size_matrices**2, )); # Reshape the initial condition into a vector (expected input for ode45)
         
-        if is_lambda_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
+        if is_a_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
             ode = lambda t, V: lyapunov_ode(t, V, self.A(t), self.D);           # Function handle that defines the Langevin equation (returns the derivative)
         else:
             ode = lambda t, V: lyapunov_ode(t, V, self.A, self.D);              # Lambda unction that defines the Lyapunov equation (returns the derivative)
@@ -776,7 +776,7 @@ class gaussian_dynamics:
           ss - gaussian_state with steady state of the system
         """
       
-        if is_lambda_function(self.A):                                          # If the Langevin and Lyapunov eqs. have a time dependency, move to the Floquet solution
+        if is_a_function(self.A):                                               # If the Langevin and Lyapunov eqs. have a time dependency, move to the Floquet solution
             ss = self.floquet(A_0, A_c, A_s, omega);
             self.steady_state_internal = ss;
         else :                                                                  # If the above odes are time independent, 
@@ -859,7 +859,7 @@ class gaussian_dynamics:
         
         self.R_semi_classical = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
         
-        if is_lambda_function(self.A):                                          # I have to check if there is a time_dependency on the odes
+        if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
             AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
         else:
             AA = lambda t: self.A;                                              # If A is does not vary in time, the new function always returns the same value 
