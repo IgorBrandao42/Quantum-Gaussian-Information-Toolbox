@@ -54,7 +54,7 @@ a = squeezed.displace(3 + 4j); # Apply displacement operator
 
 b = thermal.squeeze(2);        # Apply squeezing operator
 
-c = a.rotate(pi/2);		       # Apply rotation operator
+c = a.rotate(np.pi/2);		       # Apply rotation operator
 
 d = bipartite_state.beam_splitter(1.5) # Apply beam splitter operator
 
@@ -94,8 +94,8 @@ See below a simple example:
 import numpy as np
 from quantum_gaussian_toolbox import  *
 
-omega = 2*pi*197e+3                            # Particle natural frequency [Hz]
-gamma = 2*pi*881.9730                          # Damping constant [Hz] at 1.4 mbar pressure
+omega = 2*np.pi*197e+3                         # Particle natural frequency [Hz]
+gamma = 2*np.pi*881.9730                       # Damping constant [Hz] at 1.4 mbar pressure
 nbar_env = 3.1731e+07                          # Environmental    occupation number
 
 A = np.block([[    0   ,  +omega ]             # Drift matrix for harmonic potential
@@ -107,7 +107,7 @@ N = np.zeros((2,1))                            # Mean noise vector
 alpha = 1 + 2j                                 # Coherent state amplitude
 initial_state = gaussian_state("coherent",alpha) # Initial state
 
-t = linspace(0, 2*pi/omega, 1000);              # Timestamps for simulation
+t = linspace(0, 2*np.pi/omega, 1000);          # Timestamps for simulation
 simulation = gaussian_dynamics(A, D, N, initial_state); # Create simulation instance!
 states = simulation.run(t);                    # Simulate and retrieve time evolved states (array of gaussian_state instances)   
 ```
