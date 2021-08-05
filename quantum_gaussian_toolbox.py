@@ -822,8 +822,8 @@ class gaussian_dynamics:
         R_ss_F = np.linalg.solve(A_F, -N_F);                                    # Calculate steady-state Floquet mean quadratures vector
         V_ss_F = solve_continuous_lyapunov(A_F, -D_F);                          # Calculate steady-state Floquet covariance matrix
         
-        R_ss = R_ss_F[1:M];                                                     # Get only the first entries
-        V_ss = V_ss_F[1:M, 1:M];                                                # Get only the first sub-matrix
+        R_ss = R_ss_F[0:M];                                                     # Get only the first entries
+        V_ss = V_ss_F[0:M, 0:M];                                                # Get only the first sub-matrix
         
         self.steady_state_internal = gaussian_state(R_ss, V_ss); # Generate the steady state
         ss = self.steady_state_internal; 
