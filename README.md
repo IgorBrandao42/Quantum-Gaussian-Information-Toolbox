@@ -28,7 +28,7 @@ V = np.array([[1, 0, 0, 0],                          # Covariance matrix
               [0, 0, 1, 0],
               [0, 0, 0, 1]])
               
-bipartite_state = gaussian_state(R, V);				 # Generic multimode gaussian state
+bipartite_state = gaussian_state(R, V);		     # Generic multimode gaussian state
 ```
 
 More so, it is possible to combine any number of gaussian states into their direct product and retrieve only partitions of the composite gaussian state:
@@ -50,13 +50,13 @@ It is possible to apply a number of gaussian unitaries to a given single-mode or
 	 - Two-mode squeezing operator
 
 ```python
-a = squeezed.displace(3 + 4j); # Apply displacement operator
+a = squeezed.displace(3 + 4j); 	          # Apply displacement operator
 
-b = thermal.squeeze(2);        # Apply squeezing operator
+b = thermal.squeeze(2);        	          # Apply squeezing operator
 
-c = a.rotate(np.pi/2);		       # Apply rotation operator
+c = a.rotate(np.pi/2);		          # Apply rotation operator
 
-d = bipartite_state.beam_splitter(1.5) # Apply beam splitter operator
+d = bipartite_state.beam_splitter(1.5)    # Apply beam splitter operator
 
 e = bipartite_state.two_mode_squeezing(2) # Apply two-mode squeezing operator
 ```
