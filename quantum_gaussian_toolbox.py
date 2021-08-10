@@ -494,7 +494,14 @@ class gaussian_state:                                                           
         assert self.N_modes   == 1, "Can only apply displacement operator on single mode state"
         d = np.array([[alpha.real], [alpha.imag]]);
         self.R = self.R + d;
-      
+       
+        # for i in range(len(indexes)):
+        #     d = np.array([[alpha[i].real], [alpha[i].imag]])
+        #     
+        #     idx = indexes[i]
+        #     
+        #     self.R[2*idx+1:2*idx+3] = self.R[2*idx+1:2*idx+3] + d
+       
         # If a displacement is attempted at a whole array of states, it is possible to apply a displacement in every entry
         # however, I cannot see why this would be the desired effect, I prefer to consider an error
         # assert(all([obj.N_modes]) == 1, "Can only apply displacement operator on single mode state")
@@ -544,7 +551,7 @@ class gaussian_state:                                                           
         assert self.N_modes==2, "Beam splitter transformation can only be applied for a two mode system"
         
         B = np.sqrt(tau)*np.identity(2)
-        S = np.sqrt(1-tau)*np.indentity(2)
+        S = np.sqrt(1-tau)*np.identity(2)
         BS = np.block([[B, S], [-S, B]])
         BS_T = np.transpose(BS)
         
@@ -760,7 +767,7 @@ class gaussian_dynamics:
         for i in range(self.N_time):
             self.state.append( gaussian_state(self.R[:, i], self.V[i]) );
         
-    def steady_state(self, A_0, A_c, A_s, omega):
+    def steady_state(self, A_0=0, A_c=0, A_s=0, omega=0): # *args -> CONSERTAR !
         """
         Calculates the steady state for the system
        
@@ -867,15 +874,15 @@ class gaussian_dynamics:
         for i in range(N_ensemble):                                             # Loop on the random initial positions (# Monte Carlos simulation using Euler-Maruyama method in each iteration)
             
             X = np.zeros((self.Size_matrices, self.N_time));                    # For this iteration, this matrix stores each quadrature at each time (first and second dimensions, respectively)
-            X[:,1] = np.random.normal(mean_0, std_deviation_0)                  # Initial Cavity position quadrature (normal distribution for vacuum state)
+            X[:,0] = np.random.normal(mean_0, std_deviation_0)                  # Initial Cavity position quadrature (normal distribution for vacuum state)
             
             noise = np.random.standard_normal(X.shape);
-            for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration
+            for k in range(self.N_time):                                        # Euler-Maruyama method for stochastic integration
                 X[:,k+1] = X[:,k] + np.matmul(AA(self.t[k]), X[:,k])*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
                                    
-            self.R_semi_classical = self.R_semi_classical + X;                      # Add the new  Monte Carlos iteration quadratures to the same matrix
+            self.R_semi_classical = self.R_semi_classical + X;                  # Add the new  Monte Carlos iteration quadratures to the same matrix
         
-        self.R_semi_classical = self.R_semi_classical/N_ensemble;                 # Divide the ensemble sum to obtain the average quadratures at each time
+        self.R_semi_classical = self.R_semi_classical/N_ensemble;               # Divide the ensemble sum to obtain the average quadratures at each time
  
 
 
