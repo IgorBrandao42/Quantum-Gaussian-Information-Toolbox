@@ -202,7 +202,7 @@ class gaussian_state:                                                           
           rho - gaussian_state with all of the specified modes
       """
       
-      N_A = len(indexes);                                                       # Twice the number of modes in resulting state
+      N_A = len(indexes);                                                       # Number of modes in resulting state
       assert N_A>0 and N_A <= self.N_modes, "Partial trace over more states than exists in gaussian state"
       
       R0 = np.zeros((2*N_A, 1))
@@ -501,10 +501,6 @@ class gaussian_state:                                                           
         #     idx = indexes[i]
         #     
         #     self.R[2*idx+1:2*idx+3] = self.R[2*idx+1:2*idx+3] + d
-       
-        # If a displacement is attempted at a whole array of states, it is possible to apply a displacement in every entry
-        # however, I cannot see why this would be the desired effect, I prefer to consider an error
-        # assert(all([obj.N_modes]) == 1, "Can only apply displacement operator on single mode state")
     
     def squeeze(self, r):
         """
@@ -577,6 +573,121 @@ class gaussian_state:                                                           
         
         self.R = np.matmul(S2, self.R);
         self.V = np.matmul( np.matmul(S2, self.V), S2_T)
+        
+    # Gaussian measurements
+    def measurement_general(self, *args):
+        """
+        After a general gaussian measurement is performed on the last m modes of a (n+m)-mode gaussian state
+        this method calculates the conditional state the remaining n modes evolve into
+        
+        The user must provide the gaussian_state of the measured m-mode state or its mean value and covariance matrix
+        
+        At the moment, this method can only perform the measurement on the last modes of the global state,
+        if you know how to perform this task on a generic mode, contact me so I can implement it! :)
+       
+        ARGUMENTS:
+           R_m      - first moments     of the conditional state after the measurement
+           V_m      - covariance matrix of the conditional state after the measurement
+           or
+           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+        
+        REFERENCE:
+           Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
+        """
+        if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
+            R_m = args[0].R;
+            V_m = args[0].V;
+        else:                                                                   # If the input arguments are the conditional state's mean quadrature vector anc covariance matrix
+            R_m = args[0];
+            V_m = args[1];
+        
+        idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);               # Indexes to the modes that are to be measured
+        
+        rho_B = self.only_modes(idx_modes);                                     # Get the mode measured mode in the global state previous to the measurement
+        rho_A = self.partial_trace(idx_modes);                                  # Get the other modes in the global state        previous to the measurement
+        
+        n = 2*rho_A.N_modes;                                                    # Twice the number of modes in state A
+        m = 2*rho_B.N_modes;                                                    # Twice the number of modes in state B
+        
+        V_AB = self.V[0:n, n:(n+m)];                                            # Get the matrix dictating the correlations      previous to the measurement                           
+        
+        inv_aux = np.linalg.inv(rho_B.V + V_m)                                  # Auxiliar variable
+        
+        # Update the other modes conditioned on the measurement results
+        rho_A.R = rho_A.R - np.matmul(V_AB, np.linalg.solve(rho_B.V + V_m, rho_B.R - R_m) );
+        
+        rho_A.V = rho_A.V - np.matmul(V_AB, np.matmul(inv_aux, V_AB.transpose()) );
+        
+        return rho_A
+    
+    def measurement_homodyne(self, *args):
+        """
+        After a homodyne measurement is performed on the last m modes of a (n+m)-mode gaussian state
+        this method calculates the conditional state the remaining n modes evolve into
+        
+        The user must provide the gaussian_state of the measured m-mode state or its mean value
+        
+        At the moment, this method can only perform the measurement on the last modes of the global state,
+        if you know how to perform this task on a generic mode, contact me so I can implement it! :)
+       
+        ARGUMENTS:
+           R_m      - first moments     of the conditional state after the measurement
+           V_m      - covariance matrix of the conditional state after the measurement
+           or
+           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+        
+        REFERENCE:
+           Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
+        """
+      
+        if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
+            R_m = args[0].R;
+        else:                                                                   # If the input argument is the mean quadrature vector
+            R_m = args[0];
+        
+        idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);          # Indexes to the modes that are to be measured
+        
+        rho_B = self.only_modes(idx_modes);                                     # Get the mode measured mode in the global state previous to the measurement
+        rho_A = self.partial_trace(idx_modes);                                  # Get the other modes in the global state        previous to the measurement
+        
+        n = 2*rho_A.N_modes;                                                    # Twice the number of modes in state A
+        m = 2*rho_B.N_modes;                                                    # Twice the number of modes in state B
+        
+        V_AB = self.V[0:n, n:(n+m)];                                            # Get the matrix dictating the correlations      previous to the measurement
+        
+        MP_inverse = np.diag([1/rho_B.V[1,1], 0]);                              # Moore-Penrose pseudo-inverse an auxiliar matrix (see reference)
+        
+        rho_A.R = rho_A.R - np.matmul(V_AB, np.matmul(MP_inverse, rho_B.R - R_m   ) ); # Update the other modes conditioned on the measurement results
+        rho_A.V = rho_A.V - np.matmul(V_AB, np.matmul(MP_inverse, V_AB.transpose()) );
+        return rho_A
+    
+    def measurement_heterodyne(self, *args):
+        """
+        After a heterodyne measurement is performed on the last m modes of a (n+m)-mode gaussian state
+        this method calculates the conditional state the remaining n modes evolve into
+        
+        The user must provide the gaussian_state of the measured m-mode state or the measured complex amplitude of the resulting coherent state
+        
+        At the moment, this method can only perform the measurement on the last modes of the global state,
+        if you know how to perform this task on a generic mode, contact me so I can implement it! :)
+       
+        ARGUMENTS:
+           alpha    - complex amplitude of the coherent state after the measurement
+           or
+           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+        
+        REFERENCE:
+           Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
+        """
+        
+        if isinstance(args[0], gaussian_state):                                 # If the input argument is  a gaussian_state
+            rho_B = args[0];
+        else:
+            rho_B = gaussian_state("coherent", args[0]);
+        
+        rho_A = self.measurement_general(rho_B);
+        return rho_A
+    
    
 def is_a_function(maybe_a_function):
     """
