@@ -482,79 +482,132 @@ class gaussian_state:                                                           
     
     
     # Gaussian unitaries (applicable to single mode states)
-    def displace(self, alpha):
+    def displace(self, alpha, modes=[0]):
         """
         Apply displacement operator on a single mode gaussian state
         TO DO: generalize these operation to many modes!
        
         ARGUMENT:
-           alpha - ampllitude for the displacement operator
+           alpha - complex amplitudes for the displacement operator
+           modes - indexes for the modes to be displaced 
         """
         
-        assert self.N_modes   == 1, "Can only apply displacement operator on single mode state"
-        d = np.array([[alpha.real], [alpha.imag]]);
-        self.R = self.R + d;
-       
-        # for i in range(len(indexes)):
-        #     d = np.array([[alpha[i].real], [alpha[i].imag]])
-        #     
-        #     idx = indexes[i]
-        #     
-        #     self.R[2*idx+1:2*idx+3] = self.R[2*idx+1:2*idx+3] + d
+        if not (isinstance(alpha, list) or isinstance(alpha, np.ndarray)):      # Make sure the input variables are of the correct type
+            alpha = [alpha]
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+            modes = [modes]
+        
+        assert len(modes) == len(alpha), "Unable to decide which modes to displace nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
+        
+        for i in range(len(alpha)):                                             # For each displacement amplitude
+            idx = modes[i]                                                      # Get its corresponding mode
+            
+            d = 2.0*np.array([[alpha[i].real], [alpha[i].imag]]);               # Discover by how much this mode is to be displaced
+            self.R[2*idx:2*idx+2] = self.R[2*idx:2*idx+2] + d;                  # Displace its mean value (covariance matrix is not altered)
     
-    def squeeze(self, r):
+    def squeeze(self, r, modes=[0]):
         """
         Apply squeezing operator on a single mode gaussian state
         TO DO: generalize these operation to many modes!
         
         ARGUMENT:
-           r - ampllitude for the squeezing operator
+           r     - ampllitude for the squeezing operator
+           modes - indexes for the modes to be squeezed
         """
         
-        assert self.N_modes == 1, "Error with input arguments when trying to apply displacement operator"
-        S = np.diag([np.exp(-r), np.exp(+r)]);
+        if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
+            r = [r]
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+            modes = [modes]
         
-        self.R = np.matmul(S, self.R);
-        self.V = np.matmul( np.matmul(S,self.V), S);
+        assert len(modes) == len(r), "Unable to decide which modes to squeeze nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
         
-    def rotate(self, theta):
+        S = np.eye(2*self.N_modes)                                              # Build the squeezing matrix (initially a identity matrix because there is no squeezing to be applied on other modes)
+        for i in range(len(r)):                                                 # For each squeezing parameter
+            idx = modes[i]                                                      # Get its corresponding mode
+            
+            S[2*idx:2*idx+2, 2*idx:2*idx+2] = np.diag([np.exp(-r[i]), np.exp(+r[i])]); # Build the submatrix that squeezes the desired modes
+        
+        self.R = np.matmul(S, self.R);                                          # Apply squeezing operator on first  moments
+        self.V = np.matmul( np.matmul(S,self.V), S);                            # Apply squeezing operator on second moments
+        
+    def rotate(self, theta, modes=[0]):
         """
         Apply phase rotation on a single mode gaussian state
         TO DO: generalize these operation to many modes!
         
         ARGUMENT:
            theta - ampllitude for the rotation operator
+           modes - indexes for the modes to be squeezed
         """
         
-        assert self.N_modes == 1, "Error with input arguments when trying to apply displacement operator"
-        Rot = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        if not (isinstance(theta, list) or isinstance(theta, np.ndarray)):      # Make sure the input variables are of the correct type
+            theta = [theta]
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+            modes = [modes]
+        
+        assert len(modes) == len(theta), "Unable to decide which modes to rotate nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
+        
+        Rot = np.eye(2*self.N_modes)                                            # Build the rotation matrix (initially identity matrix because there is no rotation to be applied on other modes)
+        for i in range(len(theta)):                                             # For each rotation angle
+            idx = modes[i]                                                      # Get its corresponding mode
+            
+            Rot[2*idx:2*idx+2, 2*idx:2*idx+2] = np.array([[np.cos(theta[i]/2), np.sin(theta[i]/2)], [-np.sin(theta[i]/2), np.cos(theta[i]/2)]]); # Build the submatrix that rotates the desired modes
+        
         Rot_T = np.transpose(Rot)
         
-        self.R = np.matmul(Rot, self.R);
-        self.V = np.matmul( np.matmul(Rot, self.V), Rot_T);
-    
+        self.R = np.matmul(Rot, self.R);                                        # Apply rotation operator on first  moments
+        self.V = np.matmul( np.matmul(Rot, self.V), Rot_T);                     # Apply rotation operator on second moments
+        
+    def phase(self, theta, modes=[0]):
+        """
+        Apply phase rotation on a single mode gaussian state
+        TO DO: generalize these operation to many modes!
+        
+        ARGUMENT:
+           theta - ampllitude for the rotation operator
+           modes - indexes for the modes to be squeezed
+        """
+        self.rotate(theta, modes)                                               # They are the same method/operator, this is essentially just a alias
     
     # Gaussian unitaries (applicable to two mode states)
-    def beam_splitter(self, tau):
+    def beam_splitter(self, tau, modes=[0, 1]):
         """
-        Apply a beam splitter transformation in a gaussian state
-        tau - transmissivity of the beam splitter
+        Apply a beam splitter transformation to pair of modes in a multimode gaussian state
         
         ARGUMENT:
            tau - ampllitude for the beam splitter operator
+           modes - indexes for the pair of modes which will receive the beam splitter operator 
         """
         
-        assert self.N_modes==2, "Beam splitter transformation can only be applied for a two mode system"
+        if not (isinstance(tau, list) or isinstance(tau, np.ndarray)):          # Make sure the input variables are of the correct type
+            tau = [tau]
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+            modes = [modes]
+        
+        assert len(modes) == 2, "Unable to decide which modes to apply beam splitter operator nor by how much"
+        
+        BS = np.eye(2*self.N_modes)
+        i = modes[0]
+        j = modes[1] 
         
         B = np.sqrt(tau)*np.identity(2)
         S = np.sqrt(1-tau)*np.identity(2)
-        BS = np.block([[B, S], [-S, B]])
+        
+        BS[2*i:2*i+2, 2*i:2*i+2] = B
+        BS[2*j:2*j+2, 2*j:2*j+2] = B
+        
+        BS[2*i:2*i+2, 2*j:2*j+2] =  S
+        BS[2*j:2*j+2, 2*i:2*i+2] = -S
+        
+        # BS = np.block([[B, S], [-S, B]]);
+        
         BS_T = np.transpose(BS)
         
         self.R = np.matmul(BS, self.R);
         self.V = np.matmul( np.matmul(BS, self.V), BS_T);
     
-    def two_mode_squeezing(self, r):
+    def two_mode_squeezing(self, r, modes=[0, 1]):
         """
         Apply a two mode squeezing operator  in a gaussian state
         r - squeezing parameter
@@ -563,12 +616,27 @@ class gaussian_state:                                                           
            r - ampllitude for the two-mode squeezing operator
         """
         
-        assert self.N_modes==2, "Two mode squeezing operator can only be applied for a two mode system"
+        if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
+            r = [r]
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+            modes = [modes]
+        
+        assert len(modes) == 2, "Unable to decide which modes to apply two-mode squeezing operator nor by how much"
+        
+        S2 = np.eye(2*self.N_modes)
+        i = modes[0]
+        j = modes[1] 
         
         S0 = np.cosh(r)*np.identity(2);
         S1 = np.sinh(r)*np.diag([+1,-1]);
         
-        S2 = np.block([[S0, S1], [S1, S0]])
+        S2[2*i:2*i+2, 2*i:2*i+2] = S0
+        S2[2*j:2*j+2, 2*j:2*j+2] = S0
+        
+        S2[2*i:2*i+2, 2*j:2*j+2] = S1
+        S2[2*j:2*j+2, 2*i:2*i+2] = S1
+        
+        # S2 = np.block([[S0, S1], [S1, S0]])
         S2_T = np.transpose(S2)
         
         self.R = np.matmul(S2, self.R);
@@ -784,10 +852,12 @@ class gaussian_dynamics:
             each entry of the array is a gaussian_state class instance
         """
       
-        self.langevin(t_span);                                                  # Calculate the mean quadratures for each timestamp
+        status_langevin = self.langevin(t_span);                                                  # Calculate the mean quadratures for each timestamp
       
-        self.lyapunov(t_span);                                                  # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
-      
+        status_lyapunov = self.lyapunov(t_span);                                                  # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
+        
+        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"         # Make sure they are a vector and a matrix with same length
+        
         self.build_states();                                                    # Combine the time evolutions calculated above into an array of gaussian states
       
         result = self.state;
@@ -819,9 +889,10 @@ class gaussian_dynamics:
         
         solution_langevin = solve_ivp(langevin_ode, [t_span[0], t_span[-1]], np.reshape(self.initial_state.R, (self.Size_matrices,)), t_eval=t_span) # Solve Langevin eqaution through Runge Kutta(4,5)
         # Each row in R corresponds to the solution at the value returned in the corresponding row of self.t
-      
+        
         self.R = solution_langevin.y;                                           # Store the time evolved quadratures in a class attribute
         
+        return solution_langevin.status
         #  fprintf("Langevin simulation finished!\n\n")                         # Warn user the heavy calculations ended
     
     def lyapunov(self, t_span):
@@ -851,15 +922,17 @@ class gaussian_dynamics:
         else:
             ode = lambda t, V: lyapunov_ode(t, V, self.A, self.D);              # Lambda unction that defines the Lyapunov equation (returns the derivative)
         
-        solution_langevin = solve_ivp(ode, [t_span[0], t_span[-1]], V_0_vector, t_eval=t_span) # Solve Lyapunov equation through Fourth order Runge Kutta
+        solution_lyapunov = solve_ivp(ode, [t_span[0], t_span[-1]], V_0_vector, t_eval=t_span) # Solve Lyapunov equation through Fourth order Runge Kutta
         
         # Unpack the output of ode45 into a cell where each entry contains the information about the evolved CM at each time
         self.V = [];                                                            # Initialize a cell to store all CMs for each time
         
-        for i in range(len(solution_langevin.t)):
-            V_current_vector = solution_langevin.y[:,i];                                  # Take the full Covariance matrix in vector form
+        for i in range(len(solution_lyapunov.t)):
+            V_current_vector = solution_lyapunov.y[:,i];                                  # Take the full Covariance matrix in vector form
             V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
             self.V.append(V_current);                                           # Append it on the class attribute
+            
+        return solution_lyapunov.status
     
     def build_states(self):
         """
