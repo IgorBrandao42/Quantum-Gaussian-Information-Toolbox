@@ -82,6 +82,51 @@ class gaussian_state:                                                           
         omega = np.array([[0, 1], [-1, 0]]);                                    # Auxiliar variable
         self.Omega = np.kron(np.eye(self.N_modes,dtype=int), omega)             # Save the symplectic form matrix in a class attribute                                                    
     
+    def photon_statistics(self):
+        """ Given a gaussian state, 
+        # calculates means and covariances of photon numbers of its modes
+        # 
+         CALCULATES:
+            m - mean vector of photon number
+            K - covariance matrix of the photon numbers
+        """
+        
+        
+        """
+        Returns the means and covariances of photon number of the Gaussian state
+
+        """
+        
+        A = np.zeros([N_modes,N_modes])
+        B = np.zeros([N_modes,N_modes])
+        alpha = np.zeros(N_modes)
+        alpha_ = np.zeros(N_modes)
+        K = np.zeros([N_modes,N_modes])
+        m = np.zeros(N_modes)
+        
+        for i in range(N_modes):
+            
+            alpha[i] = (1/2)*(self.R[2*i] + 1j*self.R[2*i+1])
+            alpha_[i] = (1/2)*(self.R[2*i] - 1j*self.R[2*i+1])
+            
+            for j in range(N_modes):
+                
+                A[i,j] = (1/4)*( self.V[2*i,2*j] + self.V[2*i+1,2*j+1] + 1j*(self.V[2*j,2*i+1] - self.V[2*i,2*j+1]) )
+                B[i,j] = (1/4)*( self.V[2*i,2*j] - self.V[2*i+1,2*j+1] + 1j*(self.V[2*j,2*i+1] + self.V[2*i,2*j+1]) )
+          
+        I = (1/4)*np.eye(N_modes) 
+          
+        for i in range(N_modes):
+            
+            m[i] = A[i,i] + alpha[i]*alpha_[i] - 0.5
+            
+            for j in range(N_modes):
+                
+                K[i,j] = A[i,j]*np.conj(A[i,j]) + B[i,j]*np.conj(B[i,j]) - I[i,j] + 2*np.real(alpha_[i]*(alpha[j]*A[i,j] + alpha_[j]*B[i,j] ))
+    
+        return m, K
+    
+    
     def check_uncertainty_relation(self):
       """
       Check if the generated covariance matrix indeed satisfies the uncertainty principle (debbugging)
