@@ -20,7 +20,7 @@ class gaussian_state:                                                           
     """
     Class simulation of a multimode gaussian state
     
-    ATRIBUTES:
+    ATTRIBUTES:
         self.R       - Mean quadratures vector
         self.V       - Covariance matrix
         self.Omega   - Symplectic form matrix
@@ -94,6 +94,38 @@ class gaussian_state:                                                           
       
       return V_check
     
+    def number_operator_moments(self):
+        """
+        Calculates means values and covariances of photon numbers for each mode of the gaussian state
+        
+        CALCULATES:
+            m - mean values of number operator in arranged in a vector (Nx1 numpy.ndarray)
+            K - covariance matrix of the number operator               (NxN numpy.ndarray)
+           
+        REFERENCE:
+            Phys. Rev. A 99, 023817 (2019)
+        """
+        q = self.R[::2]                                                         # Mean values of position quadratures (even entries of self.R)
+        p = self.R[1::2]                                                        # Mean values of momentum quadratures (odd  entries of self.R)
+        
+        alpha   = 0.5*(q + 1j*p)                                                # Mean values of annihilation operators
+        alpha_c = 0.5*(q - 1j*p)                                                # Mean values of creation     operators
+        
+        V_1 = self.V[0::2, 0::2]/2.0                                            # Auxiliar matrix
+        V_2 = self.V[0::2, 1::2]/2.0                                            # Auxiliar matrix
+        V_3 = self.V[1::2, 1::2]/2.0                                            # Auxiliar matrix
+        
+        A = ( V_1 + V_3 + 1j*(np.transpose(V_2) - V_2) )/2.0                    # Auxiliar matrix
+        B = ( V_1 - V_3 + 1j*(np.transpose(V_2) + V_2)   )/2.0                    # Auxiliar matrix
+        
+        temp = np.multiply(np.matmul(alpha_c, alpha.transpose()), A) + np.multiply(np.matmul(alpha_c, alpha_c.transpose()), B) # Yup, you guessed it, another auxiliar matrix
+        
+        m = np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5 # Mean values of number operator (occupation numbers)
+        
+        K = np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real # Covariance matrix for the number operator
+        
+        return m, K
+    
     def decide_which_state(self, varargin):
         # If the user provided a name-pair argument to the constructor,
         # this function reads these arguments and creates the first moments of the gaussian state
@@ -132,6 +164,8 @@ class gaussian_state:                                                           
             self.N_modes = [];
             raise ValueError("Unrecognized gaussian state name, please check for typos or explicitely pass its first moments as arguments")
     
+    def __str__(self):
+        return str(self.N_modes) + "-mode gaussian state with mean quadrature vector R =\n" + str(self.R) + "\nand covariance matrix V =\n" + str(self.V)
     
     # Construct another state, from this base gaussian_state
     def tensor_product(self, rho_list):
@@ -570,18 +604,27 @@ class gaussian_state:                                                           
         """
         self.rotate(theta, modes)                                               # They are the same method/operator, this is essentially just a alias
     
+    # def apply_unitary(S, d):
+    #     """ Apply a generic gaussian unitary 
+    #     assert all(np.isreal(a)) , "Error when applying generic unitary, displacement d is not real!"
+
+    #     assert np.matmul( np.matmul(S, self.Omega), self.Omega.transpose()) , "Error when applying generic unitary, unitary S is not symplectic!"
+
+    #     self.R = np.matmul(S, self.R) + d
+    #     self.V = np.matmul(S, self.V), self.Omega.transpose())
+    
     # Gaussian unitaries (applicable to two mode states)
     def beam_splitter(self, tau, modes=[0, 1]):
         """
         Apply a beam splitter transformation to pair of modes in a multimode gaussian state
         
         ARGUMENT:
-           tau - ampllitude for the beam splitter operator
+           tau   - transmissivity of the beam splitter
            modes - indexes for the pair of modes which will receive the beam splitter operator 
         """
         
-        if not (isinstance(tau, list) or isinstance(tau, np.ndarray)):          # Make sure the input variables are of the correct type
-            tau = [tau]
+        # if not (isinstance(tau, list) or isinstance(tau, np.ndarray)):          # Make sure the input variables are of the correct type
+        #     tau = [tau]
         if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
@@ -616,8 +659,8 @@ class gaussian_state:                                                           
            r - ampllitude for the two-mode squeezing operator
         """
         
-        if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
-            r = [r]
+        # if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
+        #     r = [r]
         if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
@@ -824,9 +867,9 @@ class gaussian_dynamics:
            self.is_stable - boolean telling if the system is stable or not
         """
       
-        self.A = A_0;                                                           # Drift matrix
-        self.D = D_0;                                                           # Diffusion Matrix
-        self.N = N_0;                                                           # Mean values of the noises
+        self.A = A_0;  # .copy() ?                                                           # Drift matrix
+        self.D = D_0;  # .copy() ?                                                          # Diffusion Matrix
+        self.N = N_0.reshape((len(N_0),1));   # .copy() ?                                                         # Mean values of the noises
         
         self.initial_state = initial_state_0;                                   # Initial state of the global system
         
@@ -856,7 +899,7 @@ class gaussian_dynamics:
       
         status_lyapunov = self.lyapunov(t_span);                                                  # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
         
-        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"         # Make sure they are a vector and a matrix with same length
+        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"         # Make sure the parameters for the time evolution are on the correct order of magnitude!
         
         self.build_states();                                                    # Combine the time evolutions calculated above into an array of gaussian states
       
