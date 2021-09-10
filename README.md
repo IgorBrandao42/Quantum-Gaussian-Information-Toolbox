@@ -17,10 +17,10 @@ Gaussian states are a particular class of continuous variable states that can be
 import numpy as np
 from quantum_gaussian_toolbox import *
 
-vacuum_state   = gaussian_state("vacuum");           # Vacuum   state
-coherent_state = gaussian_state("coherent", 1 + 2j); # Coherent state
-squeezed_state = gaussian_state("squeezed", 2);      # Squeezed state
-thermal_state  = gaussian_state("thermal", 0.1);     # Thermal  state
+vacuum   = gaussian_state("vacuum");           	     # Vacuum   state
+coherent = gaussian_state("coherent", 1 + 2j);       # Coherent state
+squeezed = gaussian_state("squeezed", 2);      	     # Squeezed state
+thermal  = gaussian_state("thermal", 0.1);           # Thermal  state
 
 R = np.array([1, 2, 3, 4])                           # Mean quadrature vector
 V = np.array([[1, 0, 0, 0],                          # Covariance matrix
@@ -50,15 +50,15 @@ It is possible to apply a number of gaussian unitaries to a given single-mode or
 	 - Two-mode squeezing operator
 
 ```python
-a = squeezed.displace(3 + 4j); 	          # Apply displacement operator
+squeezed.displace(3 + 4j); 	          # Apply displacement operator
 
-b = thermal.squeeze(2);        	          # Apply squeezing operator
+thermal.squeeze(2);        	          # Apply squeezing operator
 
-c = a.rotate(np.pi/2);		          # Apply rotation operator
+vacuum.rotate(np.pi/2);		          # Apply rotation operator
 
-d = bipartite_state.beam_splitter(1.5)    # Apply beam splitter operator
+bipartite_state.beam_splitter(1.5)    # Apply beam splitter operator
 
-e = bipartite_state.two_mode_squeezing(2) # Apply two-mode squeezing operator
+bipartite_state.two_mode_squeezing(2) # Apply two-mode squeezing operator
 ```
 
 Information about a generic multimode gaussian state can be recovered through the other 'gaussian_state' class' methods:
