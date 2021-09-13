@@ -97,7 +97,7 @@ class gaussian_state:                                                           
     
     def number_operator_moments(self):
         """
-        Calculates means values and covariances of photon numbers for each mode of the gaussian state
+        Calculates means vector and covariance matrix of photon numbers for each mode of the gaussian state
         
         CALCULATES:
             m - mean values of number operator in arranged in a vector (Nx1 numpy.ndarray)
@@ -168,6 +168,11 @@ class gaussian_state:                                                           
     
     def __str__(self):
         return str(self.N_modes) + "-mode gaussian state with mean quadrature vector R =\n" + str(self.R) + "\nand covariance matrix V =\n" + str(self.V)
+    
+    def copy(self):
+        """Create identical copy"""
+        
+        return gaussian_state(self.R, self.V)
     
     # Construct another state, from this base gaussian_state
     def tensor_product(self, rho_list):
@@ -296,10 +301,10 @@ class gaussian_state:                                                           
         Defined as the ratio of the variance of the squeezed and antisqueezed quadratures
         
         CALCULATES:
+            eta   - ratio of the variances above
             V_sq  - variance of the     squeezed quadrature
             V_asq - variance of the antisqueezed quadrature
-            eta   - ratio of the variances above
-       
+                   
         REFERENCE: 
             Phys. Rev. Research 2, 013052 (2020)
         """
@@ -800,8 +805,7 @@ class gaussian_state:                                                           
         
         rho_A = self.measurement_general(rho_B);
         return rho_A
-    
-    
+     
     def q_function(self, *args):
         
         """
@@ -842,13 +846,13 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
-        Q = np.zeros(2*self.N_modes)                                            # Mean quadrature vector (rearranged)
+        Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
         R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
         y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
         
         
         # Loop through the meshgrid and evaluate Q-function
@@ -863,8 +867,9 @@ class gaussian_state:                                                           
                 
                 q_func[i,j] = np.real(P_0*np.exp( -0.5*np.matmul(np.conj(gamma),gamma) -0.5*np.matmul( gamma , np.matmul(R,gamma)) + np.matmul( gamma , np.matmul(R,y)) ))
         
+        q_func = q_func / np.pi
+        
         return q_func
-    
     
     def matrix_element_coherent_basis(self, alpha, beta):
         
@@ -914,8 +919,148 @@ class gaussian_state:                                                           
         
         return beta_rho_alpha
        
+    def number_statistics(self, n_cutoff=10):
+        """
+        Calculates the number distribution of the gaussian state in the 
+        
+        PARAMETERS:
+            n_cutoff - maximum number for the calculation
+            
+        RETURNS:
+            P - array with the number distribution of the state (P.shape = self.N_modes*[n_cutoff])
+        """
+        
+        # Preamble, get auxiliar variables that depend only on the gaussian state parameters
+        one_over_sqrt_2 = 1.0/np.sqrt(2)                                        # Auxiliar variable to save computation time
+        
+        eye_N  = np.eye(  self.N_modes)                                         # NxN   identity matrix (auxiliar variable to save computation time)
+        eye_2N = np.eye(2*self.N_modes)                                         # 2Nx2N identity matrix (auxiliar variable to save computation time)
+        
+        U = np.block([[-1j*one_over_sqrt_2*eye_N, +1j*one_over_sqrt_2*eye_N],
+                      [    one_over_sqrt_2*eye_N,     one_over_sqrt_2*eye_N]]); # Auxiliar unitary matrix
+        
+        M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
+                      [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
+        
+        Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
+        Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
+        Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
+        
+        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
+        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
+        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        
+        
+        H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
+        
+        
+        # Calculate the probabilities
+        P = np.zeros(self.N_modes*[n_cutoff])                                   # Initialize the tensor to 0 (n_cutoff entries in each of the self.N_modes dimensions)
+        
+        idx = np.ravel_multi_index((self.N_modes)*[0], dims=P.shape, order='F')            # Get "linearized" index
+        P.ravel()[idx] = P_0                                                    # Set its first entry to P_0
+
+        # Similar procedure to what precedes. Move forward in the P tensor and fill it element by element.
+        nextP = np.ones([self.N_modes, 1], dtype=int);
+        for jj in range(1, 1+n_cutoff**(self.N_modes)-1):            # jj = 1:n_cutoff^(dim/2) - 1
+            
+            
+            for ii in range(1, 1+self.N_modes):                      #ii = 1:dim/2   # Figure out what the next coordinate to fill in is
+                jumpTo = np.zeros([self.N_modes, 1], dtype=int);
+                jumpTo[ii-1] = 1;
+                
+                if nextP[ii-1] + jumpTo[ii-1] > n_cutoff:
+                   nextP[ii-1] = 1;
+                else:
+                   nextP[ii-1] = nextP[ii-1] + 1;
+                   break
+            
+            nextCoord = np.ravel_multi_index(list(nextP-1), dims=P.shape, order='F')    # Get "linearized" index
+            
+            whichH = np.zeros([2*self.N_modes, 1], dtype=int);
+            for kk in range(1, 1+self.N_modes):                      #kk = 1:dim/2
+                whichH[kk-1] = nextP[kk-1];
+                whichH[kk+self.N_modes-1] = nextP[kk-1];
+            idx_H = np.ravel_multi_index(list(whichH-1), dims=H.shape, order='F') # # Get "linearized" index whichH = num2cell(whichH);
+            
+            P.ravel()[nextCoord] = P_0*H.ravel()[idx_H];
+            for  kk in range(1, 1+self.N_modes):                     # kk = 1:dim/2
+                P.ravel()[nextCoord] = P.ravel()[nextCoord]/np.math.factorial(nextP[kk-1]-1);
+        
+        return P, H
     
-   
+def Hermite_multidimensional(R, y, n_cutoff=10):
+    """
+    Calculates the multidimensional Hermite polynomial H_m^R(y) from m = (0, ..., 0) up to (n_cutoff, ..., n_cutoff)
+    
+    ARGUMENTS:
+        R - n by n symmetric matrix
+        y - n-dimensional point where the polynomial is to be evaluated
+        n_cutoff - maximum value for the polynomial to be calculated
+        
+    RETURNS:
+        H - tensor with the multidimensional Hermite polynomial evaluated on n-dimensional grid ( H.shape = n*[n_cutoff] )
+    
+    REFERENCE:
+        Math. Comp. 24, 537-545 (1970)
+    """
+    n = len(R)                                                                  # Dimension of the input matrix and vector
+    
+    H = np.zeros(n*[n_cutoff], dtype=complex)                                   # Initialize the tensor to 0 (n_cutoff entries in each of the dim dimensions)
+
+    m_last = np.array(n*[0], dtype=int)                                         # Linear index for last altered entry of the Hermite tensor
+    m_last_linear = np.ravel_multi_index(m_last, dims=H.shape, order='F')       # Get "linearized" index (Adjust from Python indexig to original article indexing starting a 1)
+    H.ravel()[m_last_linear] = 1                                                # Set its first entry to 1 (known value)
+    
+    n_entries = np.prod(H.shape)                                                # Number of entries on the final tensor
+    
+    for m_next_linear in range(1, n_entries-1):                                 # Loop through every entry on tensor H using linear indices ( m is the linearized index for H: H.ravel()[m] <-> H[ np.unravel_index(m, H.shape, order='F') ] )
+        
+        m_next = np.array(np.unravel_index(m_next_linear, H.shape, order='F'), dtype=int)  # Vector index for the next entry of the Hermite tensor to be calculated
+        
+        e_k = m_next - m_last                                                   # Discover how much it has transversed since last iteration
+        
+        if np.any(e_k<0):                                                       # If it changed the dimension transversed
+            m_last[e_k<0] = 0                                                   # Move the last position accordingly
+            m_last_linear = np.ravel_multi_index(m_last, dims=H.shape, order='F') # Update the last linear index accordingly
+            
+            e_k[e_k<0] = 0                                                      # Remember to alter notation (e_k must be only zeros and a single one)
+        
+        k = np.where(e_k.squeeze())[0]                                          # Index for the entry where e_k == 1 (should be only one entry that matches this condition!)
+        
+        # Calculate the first term of this new entry
+        R_times_y = 0
+        for j in range(n):                                                      # This loop is essentially the sum on this first term
+            R_times_y = R_times_y + R[k,j]*y[j,0]
+            
+        H.ravel()[m_next_linear] = R_times_y*H.ravel()[m_last_linear]           # Remember that m_last = m_next - e_k
+        
+        #  Calculate the second term of this new entry
+        for j in range(n):
+            e_j = np.zeros(n, dtype=int)
+            e_j[j] = 1                                                          # For this j, build the vector e_j
+            
+            m_jk = m_last - e_j
+            if (j == k) or np.any(m_jk < 0):                                    # If you end up with a negative index 
+                continue                                                        # the corresponding entry of the tensor is null
+            
+            m_jk_linear = np.ravel_multi_index(m_jk, dims=H.shape, order='F')
+            H.ravel()[m_next_linear] = H.ravel()[m_next_linear] - m_next[j]*R[k,j]*H.ravel()[m_jk_linear]
+            
+        #  Calculate the last term of this new entry
+        m_2k = m_next - 2*e_k
+        if np.all(m_2k >= 0):
+            m_2k_linear = np.ravel_multi_index(m_2k, dims=H.shape, order='F')
+            H.ravel()[m_next_linear] =  H.ravel()[m_next_linear] - R[k,k]*(m_next[k]-1)*H.ravel()[m_2k_linear]
+        
+        # Update the last index before moving to the next iteration
+        m_last = m_next                                                         # Update the last vector index of the loop
+        m_last_linear = np.ravel_multi_index(m_last, dims=H.shape, order='F')   # Update the last linear index of the loop
+
+    H = H.real                                                                  # Get rid off any residual complex value
+    
+    return H
+
 def is_a_function(maybe_a_function):
     """
     Auxiliar internal function checking if a given variable is a lambda function
