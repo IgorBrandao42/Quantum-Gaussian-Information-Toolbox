@@ -95,6 +95,25 @@ class gaussian_state:                                                           
       
       return V_check
     
+    def loss_ancilla(self,idx,tau):
+        """
+        Simulates a generic loss on mode idx by anexing an ancilla vacuum state and applying a
+        beam splitter operator with transmissivity tau. The ancilla is traced-off from the final state. 
+        
+        PARAMETERS:
+           idx - index of the mode that will suffer loss
+           tau - transmissivity of the beam splitter
+        
+        CALCULATES:
+            damped_state - final damped state
+        """
+
+        damped_state = self.tensor_product([gaussian_state("vacuum")])
+        damped_state.beam_splitter(tau,[idx, damped_state.N_modes-1])
+        damped_state = damped_state.partial_trace([damped_state.N_modes-1])
+        
+        return damped_state
+    
     def number_operator_moments(self):
         """
         Calculates means vector and covariance matrix of photon numbers for each mode of the gaussian state
