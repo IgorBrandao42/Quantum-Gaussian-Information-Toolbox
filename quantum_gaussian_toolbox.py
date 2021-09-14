@@ -940,13 +940,16 @@ class gaussian_state:                                                           
        
     def number_statistics(self, n_cutoff=10):
         """
-        Calculates the number distribution of the gaussian state in the 
+        Calculates the number distribution of the gaussian state
         
         PARAMETERS:
             n_cutoff - maximum number for the calculation
             
         RETURNS:
             P - array with the number distribution of the state (P.shape = self.N_modes*[n_cutoff])
+            
+        REFERENCE:
+            Phys. Rev. A 50, 813 (1994)
         """
         
         # Preamble, get auxiliar variables that depend only on the gaussian state parameters
@@ -1006,7 +1009,7 @@ class gaussian_state:                                                           
             for  kk in range(1, 1+self.N_modes):                     # kk = 1:dim/2
                 P.ravel()[nextCoord] = P.ravel()[nextCoord]/np.math.factorial(nextP[kk-1]-1);
         
-        return P, H
+        return P
     
 def Hermite_multidimensional(R, y, n_cutoff=10):
     """
