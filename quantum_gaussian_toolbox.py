@@ -612,7 +612,7 @@ class gaussian_state:                                                           
         for i in range(len(theta)):                                             # For each rotation angle
             idx = modes[i]                                                      # Get its corresponding mode
             
-            Rot[2*idx:2*idx+2, 2*idx:2*idx+2] = np.array([[np.cos(theta[i]/2), np.sin(theta[i]/2)], [-np.sin(theta[i]/2), np.cos(theta[i]/2)]]); # Build the submatrix that rotates the desired modes
+            Rot[2*idx:2*idx+2, 2*idx:2*idx+2] = np.array([[np.cos(theta[i]), np.sin(theta[i])], [-np.sin(theta[i]), np.cos(theta[i])]]); # Build the submatrix that rotates the desired modes
         
         Rot_T = np.transpose(Rot)
         
@@ -937,7 +937,98 @@ class gaussian_state:                                                           
         beta_rho_alpha = P_0*np.exp( -0.5*np.matmul(np.conj(gamma),gamma) -0.5*np.matmul( gamma , np.matmul(R,gamma)) + np.matmul( gamma , np.matmul(R,y)) ) # Hussimi Q-function
         
         return beta_rho_alpha
-       
+    
+    def matrix_element_number_basis(self, n_cutoff=10):
+        """
+        Calculates the number distribution of the gaussian state
+        
+        PARAMETERS:
+            n_cutoff - maximum number for the calculation
+            
+        RETURNS:
+            P - array with the number distribution of the state (P.shape = self.N_modes*[n_cutoff])
+            
+        REFERENCE:
+            Phys. Rev. A 50, 813 (1994)
+        """
+        
+        # Preamble, get auxiliar variables that depend only on the gaussian state parameters
+        one_over_sqrt_2 = 1.0/np.sqrt(2)                                        # Auxiliar variable to save computation time
+        
+        eye_N  = np.eye(  self.N_modes)                                         # NxN   identity matrix (auxiliar variable to save computation time)
+        eye_2N = np.eye(2*self.N_modes)                                         # 2Nx2N identity matrix (auxiliar variable to save computation time)
+        
+        U = np.block([[-1j*one_over_sqrt_2*eye_N, +1j*one_over_sqrt_2*eye_N],
+                      [    one_over_sqrt_2*eye_N,     one_over_sqrt_2*eye_N]]); # Auxiliar unitary matrix
+        
+        M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
+                      [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
+        
+        Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
+        Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
+        Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
+        
+        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
+        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
+        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        
+        
+        H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
+        
+        
+        # Calculate the probabilities
+        rho_m_n = np.zeros(self.N_modes*[n_cutoff])                                   # Initialize the tensor to 0 (n_cutoff entries in each of the self.N_modes dimensions)
+        
+        idx = np.ravel_multi_index((self.N_modes)*[0], dims=rho_m_n.shape, order='F')            # Get "linearized" index
+        rho_m_n.ravel()[idx] = P_0                                                    # Set its first entry to P_0
+
+        # Similar procedure to what precedes. Move forward in the P tensor and fill it element by element.
+        next_m = np.ones([self.N_modes, 1], dtype=int);
+        next_n = np.ones([self.N_modes, 1], dtype=int);
+        for kk in range(1, 1+n_cutoff**(self.N_modes)-1):
+            
+            for ii in range(1, 1+self.N_modes):                      #ii = 1:dim/2   # Figure out what the next coordinate to fill in is
+                jumpTo = np.zeros([self.N_modes, 1], dtype=int);
+                jumpTo[ii-1] = 1;
+                    
+                if next_n[ii-1] + jumpTo[ii-1] > n_cutoff:
+                    next_n[ii-1] = 1;
+                else:
+                    next_n[ii-1] = next_n[ii-1] + 1;
+                    break
+            
+            for jj in range(1, 1+n_cutoff**(self.N_modes)-1):            # jj = 1:n_cutoff^(dim/2) - 1
+                
+                
+                for ii in range(1, 1+self.N_modes):                             # Figure out what the next coordinate to fill in is   #ii = 1:dim/2 
+                    jumpTo = np.zeros([self.N_modes, 1], dtype=int);
+                    jumpTo[ii-1] = 1;
+                    
+                    if next_m[ii-1] + jumpTo[ii-1] > n_cutoff:                  # If it has gone over the size of the array
+                        next_m[ii-1] = 1;                                       # Move it into back along this dimension
+                    else:
+                        next_m[ii-1] = next_m[ii-1] + 1;                        # Otherwise, just move it on this dimension
+                        break                                                   # It has already moved, it will not jump over array limit again and this loop can end
+                    
+                    nextCoord = np.ravel_multi_index(list(next_m-1), dims=rho_m_n.shape, order='F')    # Get linearized index
+            
+                    whichH = np.zeros([2*self.N_modes, 1], dtype=int);          # Find the corresponding entry on the multidimensional Hermite polynomial
+                    for kk in range(1, 1+self.N_modes):                         # Entry = (m,n)                                #kk = 1:dim/2
+                        whichH[kk-1] = next_m[kk-1];                            # Entry[0:N]   = m
+                        whichH[kk+self.N_modes-1] = next_n[kk-1];               # Entry[N:2*N] = n
+                        idx_H = np.ravel_multi_index(list(whichH-1), dims=H.shape, order='F') # Get linearized index whichH = num2cell(whichH);
+            
+                    # rho_m_n.ravel()[nextCoord] = P_0*H.ravel()[idx_H];          # First multiply by the standard amplitude P_0
+                    # for  kk in range(1, 1+self.N_modes):                        # Next, divide by the square root of the appropriate factorial! # kk = 1:dim/2
+                    #     rho_m_n.ravel()[nextCoord] = rho_m_n.ravel()[nextCoord]/np.sqrt(np.math.factorial(next_m[kk-1]-1)*np.math.factorial(next_n[kk-1]-1));
+                    
+                    big_factorial = 0
+                    for  kk in range(1, 1+self.N_modes):                        # Next, divide by the square root of the appropriate factorial! # kk = 1:dim/2
+                          big_factorial = big_factorial*np.math.factorial(next_m[kk-1]-1)*np.math.factorial(next_n[kk-1]-1);
+                    rho_m_n.ravel()[nextCoord] = P_0*H.ravel()[idx_H]/np.sqrt(big_factorial)
+                    
+        return rho_m_n 
+    
     def number_statistics(self, n_cutoff=10):
         """
         Calculates the number distribution of the gaussian state
@@ -1000,16 +1091,16 @@ class gaussian_state:                                                           
             nextCoord = np.ravel_multi_index(list(nextP-1), dims=P.shape, order='F')    # Get "linearized" index
             
             whichH = np.zeros([2*self.N_modes, 1], dtype=int);
-            for kk in range(1, 1+self.N_modes):                      #kk = 1:dim/2
-                whichH[kk-1] = nextP[kk-1];
-                whichH[kk+self.N_modes-1] = nextP[kk-1];
+            for kk in range(1, 1+self.N_modes):#kk = 1:dim/2# m = (n,n) -> Repeat the entries 
+                whichH[kk-1] = nextP[kk-1];                 # m[0:N]   = n
+                whichH[kk+self.N_modes-1] = nextP[kk-1];    # m[N:2*N] = n
             idx_H = np.ravel_multi_index(list(whichH-1), dims=H.shape, order='F') # # Get "linearized" index whichH = num2cell(whichH);
             
             P.ravel()[nextCoord] = P_0*H.ravel()[idx_H];
             for  kk in range(1, 1+self.N_modes):                     # kk = 1:dim/2
                 P.ravel()[nextCoord] = P.ravel()[nextCoord]/np.math.factorial(nextP[kk-1]-1);
         
-        return P
+        return P 
     
 def Hermite_multidimensional(R, y, n_cutoff=10):
     """
