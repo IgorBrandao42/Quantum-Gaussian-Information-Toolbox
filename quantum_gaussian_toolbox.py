@@ -1194,7 +1194,11 @@ def Hermite_multidimensional(R, y, n_cutoff=10):
             e_k[e_k<0] = 0                                                      # Remember to alter notation (e_k must be only zeros and a single one)
         
         k = np.where(e_k.squeeze())[0]                                          # Index for the entry where e_k == 1 (should be only one entry that matches this condition!)
-                
+        
+        # Debugging
+        # if np.any(m_last<0):
+        #     a=1
+        
         # Calculate the first term of this new entry
         R_times_y = 0
         for j in range(n):                                                      # This loop is essentially the sum on this first term
@@ -1208,17 +1212,17 @@ def Hermite_multidimensional(R, y, n_cutoff=10):
             e_j[j] = 1                                                          # For this j, build the vector e_j
             
             m_jk = m_last - e_j
-            if np.any(m_jk < 0):                                                # If you end up with a negative index 
+            if (j==k) or np.any(m_jk < 0):                                                # If you end up with a negative index 
                 continue                                                        # the corresponding entry of the tensor is null
             
             m_jk_linear = np.ravel_multi_index(m_jk, dims=H.shape, order='F')
             H.ravel()[m_next_linear] = H.ravel()[m_next_linear] - m_next[j]*R[k,j]*H.ravel()[m_jk_linear]
             
         #  Calculate the last term of this new entry
-        # m_2k = m_next - 2*e_k
-        # if np.all(m_2k >= 0):
-        #     m_2k_linear = np.ravel_multi_index(m_2k, dims=H.shape, order='F')
-        #     H.ravel()[m_next_linear] =  H.ravel()[m_next_linear] - R[k,k]*(m_next[k]-1)*H.ravel()[m_2k_linear]
+        m_2k = m_next - 2*e_k
+        if np.all(m_2k >= 0):
+            m_2k_linear = np.ravel_multi_index(m_2k, dims=H.shape, order='F')
+            H.ravel()[m_next_linear] =  H.ravel()[m_next_linear] - R[k,k]*(m_next[k]-1)*H.ravel()[m_2k_linear]
         
         # Update the last index before moving to the next iteration
         m_last = m_next                                                         # Update the last vector index of the loop
