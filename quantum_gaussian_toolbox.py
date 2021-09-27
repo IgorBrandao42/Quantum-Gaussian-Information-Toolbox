@@ -866,14 +866,19 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+        
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2.0*M) , np.matmul( np.linalg.pinv(eye_2N+2.0*M) , np.conj(U) ) ) # Auxiliar variable
-        y = 2.0*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2.0*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2.0*M + eye_2N) , Q )  ) )        # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable
         
         # Loop through the meshgrid and evaluate Q-function
         q_func = np.zeros(ALPHA.shape)
@@ -921,15 +926,19 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+        
         Q = np.zeros(2*self.N_modes)                                            # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) )   # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
-        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                            # Auxiliar variable
-        
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )        # Auxiliar variable
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable
         
         gamma = np.zeros(2*self.N_modes,dtype=np.complex_)                      # Auxiliar 2*self.N_modes complex vector      
         gamma[:self.N_modes] = np.conj(beta)                                    # First N entries are the complex conjugate of beta
@@ -965,17 +974,21 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+        
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
-        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable        
         
         H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
-        
         
         # Calculate the probabilities
         rho_m_n = np.zeros((2*self.N_modes)*[n_cutoff])                         # Initialize the tensor to 0 (n_cutoff entries in each of the 2*self.N_modes dimensions)
@@ -1033,9 +1046,9 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
-        if np.allclose(M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
             M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
-        
+            
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
@@ -1045,8 +1058,7 @@ class gaussian_state:                                                           
         
         R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
         y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
-        
-        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )                # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable
         
         # DEBUGGING !
         # R_old = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
@@ -1060,7 +1072,6 @@ class gaussian_state:                                                           
         # print("Passou")
         
         H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
-        
         
         # Calculate the probabilities
         P = np.zeros(self.N_modes*[n_cutoff])                                   # Initialize the tensor to 0 (n_cutoff entries in each of the self.N_modes dimensions)
