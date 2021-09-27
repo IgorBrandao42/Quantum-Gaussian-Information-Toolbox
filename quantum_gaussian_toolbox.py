@@ -825,6 +825,7 @@ class gaussian_state:                                                           
         rho_A = self.measurement_general(rho_B);
         return rho_A
      
+    # Debugging
     def q_function(self, *args):
         
         """
@@ -1021,25 +1022,42 @@ class gaussian_state:                                                           
         """
         
         # Preamble, get auxiliar variables that depend only on the gaussian state parameters
-        one_over_sqrt_2 = 1.0/np.sqrt(2)                                        # Auxiliar variable to save computation time
+        one_over_sqrt_2 = 1.0/np.sqrt(2.0)                                      # Auxiliar variable to save computation time
         
         eye_N  = np.eye(  self.N_modes)                                         # NxN   identity matrix (auxiliar variable to save computation time)
         eye_2N = np.eye(2*self.N_modes)                                         # 2Nx2N identity matrix (auxiliar variable to save computation time)
         
-        U = np.block([[-1j*one_over_sqrt_2*eye_N, +1j*one_over_sqrt_2*eye_N],
-                      [    one_over_sqrt_2*eye_N,     one_over_sqrt_2*eye_N]]); # Auxiliar unitary matrix
+        U = one_over_sqrt_2*np.block([[-1j*eye_N, +1j*eye_N],
+                                      [    eye_N,     eye_N]]);                 # Auxiliar unitary matrix
         
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
+        
+        if np.allclose(M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
         
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
-        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )                # Auxiliar variable
+        
+        # DEBUGGING !
+        # R_old = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
+        # y_old = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
+        # P_0_old = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        # 
+        # assert np.allclose(R  ,   R_old, rtol=1e-10, atol=1e-10), "Achei!"
+        # assert np.allclose(y  ,   y_old, rtol=1e-10, atol=1e-10), "Achei!"
+        # assert np.allclose(P_0, P_0_old, rtol=1e-10, atol=1e-10), "Achei!"
+        # 
+        # print("Passou")
         
         H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
         
