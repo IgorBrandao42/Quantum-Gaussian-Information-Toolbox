@@ -9,12 +9,16 @@ Contact: igorbrandao@aluno.puc-rio.br
 
 
 import numpy as np
+from numpy.linalg import det
+from numpy.linalg import matrix_power
+
 from scipy.integrate import solve_ivp
 from scipy.linalg import solve_continuous_lyapunov
 from scipy.linalg import block_diag
 from scipy.linalg import sqrtm
-from numpy.linalg import det
-from numpy.linalg import matrix_power
+from scipy.linalg import fractional_matrix_power
+
+
 #import types
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
@@ -83,70 +87,6 @@ class gaussian_state:                                                           
         omega = np.array([[0, 1], [-1, 0]]);                                    # Auxiliar variable
         self.Omega = np.kron(np.eye(self.N_modes,dtype=int), omega)             # Save the symplectic form matrix in a class attribute                                                    
     
-    def check_uncertainty_relation(self):
-      """
-      Check if the generated covariance matrix indeed satisfies the uncertainty principle (debbugging)
-      """
-      
-      V_check = self.V + 1j*self.Omega;
-      eigvalue, eigvector = np.linalg.eig(V_check)
-      
-      assert all(eigvalue>=0), "CM does not satisfy uncertainty relation!"
-      
-      return V_check
-    
-    def loss_ancilla(self,idx,tau):
-        """
-        Simulates a generic loss on mode idx by anexing an ancilla vacuum state and applying a
-        beam splitter operator with transmissivity tau. The ancilla is traced-off from the final state. 
-        
-        PARAMETERS:
-           idx - index of the mode that will suffer loss
-           tau - transmissivity of the beam splitter
-        
-        CALCULATES:
-            damped_state - final damped state
-        """
-
-        damped_state = self.tensor_product([gaussian_state("vacuum")])
-        damped_state.beam_splitter(tau,[idx, damped_state.N_modes-1])
-        damped_state = damped_state.partial_trace([damped_state.N_modes-1])
-        
-        return damped_state
-    
-    def number_operator_moments(self):
-        """
-        Calculates means vector and covariance matrix of photon numbers for each mode of the gaussian state
-        
-        CALCULATES:
-            m - mean values of number operator in arranged in a vector (Nx1 numpy.ndarray)
-            K - covariance matrix of the number operator               (NxN numpy.ndarray)
-           
-        REFERENCE:
-            Phys. Rev. A 99, 023817 (2019)
-            Many thanks to Daniel Tandeitnik for the base code for this method!
-        """
-        q = self.R[::2]                                                         # Mean values of position quadratures (even entries of self.R)
-        p = self.R[1::2]                                                        # Mean values of momentum quadratures (odd  entries of self.R)
-        
-        alpha   = 0.5*(q + 1j*p)                                                # Mean values of annihilation operators
-        alpha_c = 0.5*(q - 1j*p)                                                # Mean values of creation     operators
-        
-        V_1 = self.V[0::2, 0::2]/2.0                                            # Auxiliar matrix
-        V_2 = self.V[0::2, 1::2]/2.0                                            # Auxiliar matrix
-        V_3 = self.V[1::2, 1::2]/2.0                                            # Auxiliar matrix
-        
-        A = ( V_1 + V_3 + 1j*(np.transpose(V_2) - V_2) )/2.0                    # Auxiliar matrix
-        B = ( V_1 - V_3 + 1j*(np.transpose(V_2) + V_2)   )/2.0                    # Auxiliar matrix
-        
-        temp = np.multiply(np.matmul(alpha_c, alpha.transpose()), A) + np.multiply(np.matmul(alpha_c, alpha_c.transpose()), B) # Yup, you guessed it, another auxiliar matrix
-        
-        m = np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5 # Mean values of number operator (occupation numbers)
-        
-        K = np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real # Covariance matrix for the number operator
-        
-        return m, K
-    
     def decide_which_state(self, varargin):
         # If the user provided a name-pair argument to the constructor,
         # this function reads these arguments and creates the first moments of the gaussian state
@@ -184,6 +124,18 @@ class gaussian_state:                                                           
         else:
             self.N_modes = [];
             raise ValueError("Unrecognized gaussian state name, please check for typos or explicitely pass its first moments as arguments")
+    
+    def check_uncertainty_relation(self):
+      """
+      Check if the generated covariance matrix indeed satisfies the uncertainty principle (debbugging)
+      """
+      
+      V_check = self.V + 1j*self.Omega;
+      eigvalue, eigvector = np.linalg.eig(V_check)
+      
+      assert all(eigvalue>=0), "CM does not satisfy uncertainty relation!"
+      
+      return V_check
     
     def __str__(self):
         return str(self.N_modes) + "-mode gaussian state with mean quadrature vector R =\n" + str(self.R) + "\nand covariance matrix V =\n" + str(self.V)
@@ -279,6 +231,24 @@ class gaussian_state:                                                           
       rho_A = gaussian_state(R0, V0);
       return rho_A
     
+    def loss_ancilla(self,idx,tau):
+        """
+        Simulates a generic loss on mode idx by anexing an ancilla vacuum state and applying a
+        beam splitter operator with transmissivity tau. The ancilla is traced-off from the final state. 
+        
+        PARAMETERS:
+           idx - index of the mode that will suffer loss
+           tau - transmissivity of the beam splitter
+        
+        CALCULATES:
+            damped_state - final damped state
+        """
+
+        damped_state = self.tensor_product([gaussian_state("vacuum")])
+        damped_state.beam_splitter(tau,[idx, damped_state.N_modes-1])
+        damped_state = damped_state.partial_trace([damped_state.N_modes-1])
+        
+        return damped_state
     
     # Properties of the gaussian state
     def symplectic_eigenvalues(self):
@@ -398,6 +368,39 @@ class gaussian_state:                                                           
         nbar = 0.25*( Var_x + mean_x**2 + Var_p + mean_p**2 ) - 0.5;            # Calculate occupantion numbers at current time
         return nbar
     
+    def number_operator_moments(self):
+        """
+        Calculates means vector and covariance matrix of photon numbers for each mode of the gaussian state
+        
+        CALCULATES:
+            m - mean values of number operator in arranged in a vector (Nx1 numpy.ndarray)
+            K - covariance matrix of the number operator               (NxN numpy.ndarray)
+           
+        REFERENCE:
+            Phys. Rev. A 99, 023817 (2019)
+            Many thanks to Daniel Tandeitnik for the base code for this method!
+        """
+        q = self.R[::2]                                                         # Mean values of position quadratures (even entries of self.R)
+        p = self.R[1::2]                                                        # Mean values of momentum quadratures (odd  entries of self.R)
+        
+        alpha   = 0.5*(q + 1j*p)                                                # Mean values of annihilation operators
+        alpha_c = 0.5*(q - 1j*p)                                                # Mean values of creation     operators
+        
+        V_1 = self.V[0::2, 0::2]/2.0                                            # Auxiliar matrix
+        V_2 = self.V[0::2, 1::2]/2.0                                            # Auxiliar matrix
+        V_3 = self.V[1::2, 1::2]/2.0                                            # Auxiliar matrix
+        
+        A = ( V_1 + V_3 + 1j*(np.transpose(V_2) - V_2) )/2.0                    # Auxiliar matrix
+        B = ( V_1 - V_3 + 1j*(np.transpose(V_2) + V_2)   )/2.0                    # Auxiliar matrix
+        
+        temp = np.multiply(np.matmul(alpha_c, alpha.transpose()), A) + np.multiply(np.matmul(alpha_c, alpha_c.transpose()), B) # Yup, you guessed it, another auxiliar matrix
+        
+        m = np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5 # Mean values of number operator (occupation numbers)
+        
+        K = np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real # Covariance matrix for the number operator
+        
+        return m, K
+    
     def coherence(self):
         """
         Coherence of a multipartite gaussian system
@@ -419,40 +422,6 @@ class gaussian_state:                                                           
         
         C = temp - S_total;                                                     # Calculation of the mutual information
         return C
-    
-    def wigner(self, X, P):
-        """
-        Calculates the wigner function for a single mode gaussian state
-       
-        PARAMETERS
-            X, P - 2D grid where the wigner function is to be evaluated (use meshgrid)
-        
-        CALCULATES:
-            W - array with Wigner function over the input 2D grid
-        """
-        
-        assert self.N_modes == 1, "At the moment, this program only calculates the wigner function for a single mode state"
-        
-        N = self.N_modes;                                                       # Number of modes
-        W = np.zeros((len(X), len(P)));                                         # Variable to store the calculated wigner function
-        
-        one_over_purity = 1/self.purity();
-        
-        inv_V = np.linalg.inv(self.V)
-        
-        for i in range(len(X)):
-            x = np.block([ [X[i,:]] , [P[i,:]] ]);   
-            
-            for j in range(x.shape[1]):
-                dx = np.vstack(x[:, j]) - self.R;                                          # x_mean(:,i) is the i-th point in phase space
-                dx_T = np.hstack(dx)
-                
-                W_num = np.exp( - np.matmul(np.matmul(dx_T, inv_V), dx)/2 );    # Numerator
-                
-                W_den = (2*np.pi)**N * one_over_purity;                         # Denominator
-          
-                W[i, j] = W_num/W_den;                                          # Calculate the wigner function at every point on the grid
-        return W
     
     def logarithmic_negativity(self, *args):
         """
@@ -539,7 +508,6 @@ class gaussian_state:                                                           
         
         F = F_0*np.exp( -np.matmul(np.matmul(delta_u_T,inv_V), delta_u)  / 4);                        # Fidelity
         return F
-    
     
     # Gaussian unitaries (applicable to single mode states)
     def displace(self, alpha, modes=[0]):
@@ -630,15 +598,6 @@ class gaussian_state:                                                           
         """
         self.rotate(theta, modes)                                               # They are the same method/operator, this is essentially just a alias
     
-    # def apply_unitary(S, d):
-    #     """ Apply a generic gaussian unitary 
-    #     assert all(np.isreal(a)) , "Error when applying generic unitary, displacement d is not real!"
-
-    #     assert np.matmul( np.matmul(S, self.Omega), self.Omega.transpose()) , "Error when applying generic unitary, unitary S is not symplectic!"
-
-    #     self.R = np.matmul(S, self.R) + d
-    #     self.V = np.matmul(S, self.V), self.Omega.transpose())
-    
     # Gaussian unitaries (applicable to two mode states)
     def beam_splitter(self, tau, modes=[0, 1]):
         """
@@ -711,6 +670,23 @@ class gaussian_state:                                                           
         self.R = np.matmul(S2, self.R);
         self.V = np.matmul( np.matmul(S2, self.V), S2_T)
         
+    # Generic multimode gaussian unitary
+    def apply_unitary(self, S, d):
+        """
+        Apply a generic gaussian unitary on the gaussian state
+        
+        ARGUMENTS:
+            S,d - affine symplectic map (S, d) acting on the phase space, equivalent to gaussian unitary
+        """
+        assert all(np.isreal(d)) , "Error when applying generic unitary, displacement d is not real!"
+        
+        S_is_symplectic = np.allclose(np.matmul(np.matmul(S, self.Omega), S.transpose()), self.Omega)
+        
+        assert S_is_symplectic , "Error when applying generic unitary, unitary S is not symplectic!"
+        
+        self.R = np.matmul(S, self.R) + d
+        self.V = np.matmul(np.matmul(S, self.V), S.transpose())
+        
     # Gaussian measurements
     def measurement_general(self, *args):
         """
@@ -730,6 +706,7 @@ class gaussian_state:                                                           
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
+           Conditional and unconditional Gaussian quantum dynamics - Contemp. Phys. 57, 331 (2016)
         """
         if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
             R_m = args[0].R;
@@ -824,10 +801,43 @@ class gaussian_state:                                                           
         
         rho_A = self.measurement_general(rho_B);
         return rho_A
-     
-    # Debugging
-    def q_function(self, *args):
+    
+    # Phase space representation
+    def wigner(self, X, P):
+        """
+        Calculates the wigner function for a single mode gaussian state
+       
+        PARAMETERS
+            X, P - 2D grid where the wigner function is to be evaluated (use meshgrid)
         
+        CALCULATES:
+            W - array with Wigner function over the input 2D grid
+        """
+        
+        assert self.N_modes == 1, "At the moment, this program only calculates the wigner function for a single mode state"
+        
+        N = self.N_modes;                                                       # Number of modes
+        W = np.zeros((len(X), len(P)));                                         # Variable to store the calculated wigner function
+        
+        one_over_purity = 1/self.purity();
+        
+        inv_V = np.linalg.inv(self.V)
+        
+        for i in range(len(X)):
+            x = np.block([ [X[i,:]] , [P[i,:]] ]);   
+            
+            for j in range(x.shape[1]):
+                dx = np.vstack(x[:, j]) - self.R;                                          # x_mean(:,i) is the i-th point in phase space
+                dx_T = np.hstack(dx)
+                
+                W_num = np.exp( - np.matmul(np.matmul(dx_T, inv_V), dx)/2 );    # Numerator
+                
+                W_den = (2*np.pi)**N * one_over_purity;                         # Denominator
+          
+                W[i, j] = W_num/W_den;                                          # Calculate the wigner function at every point on the grid
+        return W
+    
+    def q_function(self, *args):
         """
         Calculates the Hussimi Q-function over a meshgrid
         
@@ -896,8 +906,9 @@ class gaussian_state:                                                           
         
         return q_func
     
+    # Density matrix elements
+    
     def density_matrix_coherent_basis(self, alpha, beta):
-        
         """
         Calculates the matrix elements of the density operator on the coherent state basis
         
@@ -1111,7 +1122,7 @@ class gaussian_state:                                                           
             for kk in range(self.N_modes):                     # kk = 1:dim/2
                 P.ravel()[int(nextCoord)] = P.ravel()[int(nextCoord)]/np.math.factorial(int(nextP[kk]-1));
         
-        return P 
+        return P
     
 def Hermite_multidimensional_original(R, y, n_cutoff=10):
     """
@@ -1267,7 +1278,7 @@ def is_a_function(maybe_a_function):
     """
     return callable(maybe_a_function)                   # OLD: isinstance(obj, types.LambdaType) and obj.__name__ == "<lambda>"
 
-def lyapunov_ode(t, V_old_vector, A, D):
+def lyapunov_ode_unconditional(t, V_old_vector, A, D):
     """
     Auxiliar internal function defining the Lyapunov equation 
     and calculating the derivative of the covariance matrix
@@ -1284,6 +1295,26 @@ def lyapunov_ode(t, V_old_vector, A, D):
     dVdt_vector = np.reshape(dVdt, (M**2,));                                     # Matrix -> vector
     return dVdt_vector
 
+def lyapunov_ode_conditional(t, V_old_vector, A, D, C, Gamma):
+    """
+    Auxiliar internal function defining the Lyapunov equation 
+    and calculating the derivative of the covariance matrix
+    """
+    
+    M = A.shape[0];                                                             # System dimension (N_particles + 1 cavity field)partículas  + 1 campo)
+    
+    A_T = np.transpose(A)                                                       # Transpose of the drift matrix
+    
+    V_old = np.reshape(V_old_vector, (M, M));                                   # Vector -> matrix
+    
+    # chi = np.matmul(C, V_old) + Gamma             # THIS SHOULD BE FASTER!
+    # chi = np.matmul(np.transpose(chi), chi)
+    chi = np.matmul( np.matmul(V_old, np.transpose(C)) + np.transpose(Gamma),  np.matmul(C, V_old) + Gamma )    # Auxiliar matrix
+    
+    dVdt = np.matmul(A, V_old) + np.matmul(V_old, A_T) + D - chi;               # Calculate how much the CM derivative in this time step
+    
+    dVdt_vector = np.reshape(dVdt, (M**2,));                                    # Matrix -> vector
+    return dVdt_vector
 
 class gaussian_dynamics:
     """
@@ -1343,10 +1374,12 @@ class gaussian_dynamics:
             is_not_stable = np.any( eigvalue.real > 0 );                        # Check if any eigenvalue has positive real part (unstability)
             self.is_stable = not is_not_stable                                  # Store the information of the stability of the system in a class attribute
     
-    def run(self, t_span):
+    def unconditional_dynamics(self, t_span):
         """
-        Run every time evolution available at the input timestamps.
-       
+        Calculates the time evolution of the initial state 
+        following an unconditional dynamics at the input timestamps.
+        
+        
         PARAMETERS:
             self   - class instance
             tspan - Array with time stamps when the calculations should be done
@@ -1362,10 +1395,10 @@ class gaussian_dynamics:
         
         assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"         # Make sure the parameters for the time evolution are on the correct order of magnitude!
         
-        self.build_states();                                                    # Combine the time evolutions calculated above into an array of gaussian states
+        self.build_states(is_conditional=False);                                                    # Combine the time evolutions calculated above into an array of gaussian states
       
-        result = self.state;
-        return result                                                           # Return the array of time evolved gaussian_state
+        result = self.states_unconditional;
+        return result                                                           # Return the array of time evolved gaussian_state following unconditional dynamics
     
     def langevin(self, t_span):
         """
@@ -1399,7 +1432,7 @@ class gaussian_dynamics:
         return solution_langevin.status
         #  fprintf("Langevin simulation finished!\n\n")                         # Warn user the heavy calculations ended
     
-    def lyapunov(self, t_span):
+    def lyapunov(self, t_span, is_conditional=False, C=0, Gamma=0):
         """
         Solve the lyapunov equation for the time evolved covariance matrix of the full system
        
@@ -1417,28 +1450,42 @@ class gaussian_dynamics:
         # disp("Lyapunov simulation started...")                                # Warn the user that heavy calculations started (their computer did not freeze!)
         
         self.t = t_span;                                                        # Timestamps for the simulation
-        self.N_time = len(t_span);                                           # Number of timestamps
+        self.N_time = len(t_span);                                              # Number of timestamps
         
         V_0_vector = np.reshape(self.initial_state.V, (self.Size_matrices**2, )); # Reshape the initial condition into a vector (expected input for ode45)
         
-        if is_a_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
-            ode = lambda t, V: lyapunov_ode(t, V, self.A(t), self.D);           # Function handle that defines the Langevin equation (returns the derivative)
+        if is_conditional:                                                      # Check if the dynamics is conditional or unconditional
+            if is_a_function(self.A):                                           # Check if there is a time_dependency on the odes
+                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A(t), self.D, C, Gamma); # Function handle that defines the Langevin equation (returns the derivative)
+            else:
+                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A, self.D, C, Gamma);    # Lambda unction that defines the Lyapunov equation (returns the derivative)
         else:
-            ode = lambda t, V: lyapunov_ode(t, V, self.A, self.D);              # Lambda unction that defines the Lyapunov equation (returns the derivative)
-        
+            if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
+                ode = lambda t, V: lyapunov_ode_unconditional(t, V, self.A(t), self.D); # Function handle that defines the Langevin equation (returns the derivative)
+            else:
+                ode = lambda t, V: lyapunov_ode_unconditional(t, V, self.A, self.D);    # Lambda unction that defines the Lyapunov equation (returns the derivative)
+                
         solution_lyapunov = solve_ivp(ode, [t_span[0], t_span[-1]], V_0_vector, t_eval=t_span) # Solve Lyapunov equation through Fourth order Runge Kutta
         
         # Unpack the output of ode45 into a cell where each entry contains the information about the evolved CM at each time
-        self.V = [];                                                            # Initialize a cell to store all CMs for each time
+        if is_conditional:
+            self.V_conditional = [];                                            # Initialize a cell to store all CMs for each time
         
-        for i in range(len(solution_lyapunov.t)):
-            V_current_vector = solution_lyapunov.y[:,i];                                  # Take the full Covariance matrix in vector form
-            V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
-            self.V.append(V_current);                                           # Append it on the class attribute
+            for i in range(len(solution_lyapunov.t)):
+                V_current_vector = solution_lyapunov.y[:,i];                                        # Take the full Covariance matrix in vector form
+                V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
+                self.V_conditional.append(V_current);                                             # Append it on the class attribute
+        else:
+            self.V = [];                                                        # Initialize a cell to store all CMs for each time
+        
+            for i in range(len(solution_lyapunov.t)):
+                V_current_vector = solution_lyapunov.y[:,i];                                        # Take the full Covariance matrix in vector form
+                V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
+                self.V.append(V_current);                                                           # Append it on the class attribute
             
         return solution_lyapunov.status
     
-    def build_states(self):
+    def build_states(self, is_conditional=False):
         """
         Builds the gaussian state at each time from their mean values and covariance matrices
         This funciton is completely unnecessary, but it makes the code more readable :)
@@ -1447,13 +1494,24 @@ class gaussian_dynamics:
           self.state - array with time evolved gaussian states for each timestamp of the input argument t_span
           each entry of the array is a gaussian_state class instance
         """
-      
-        assert self.R.size != 0 and self.V != 0, "No mean quadratures or covariance matrices, can not build time evolved states!"
         
-        self.state = []
-        
-        for i in range(self.N_time):
-            self.state.append( gaussian_state(self.R[:, i], self.V[i]) );
+        if is_conditional:                                                      # If  the conditional dynamics was calculated
+            
+            assert hasattr(self, 'R_conditional') and hasattr(self, 'V_conditional'), "No conditional mean quadratures or covariance matrices, can not build time evolved states!"
+            
+            self.states_conditional = []                                        # Use the conditional arrays
+            
+            for i in range(self.N_time):
+                self.states_conditional.append( gaussian_state(self.R_conditional[:, i], self.V_conditional[i]) );
+                
+        else:                                                                   # If  the unconditional dynamics was calculated
+            
+            assert hasattr(self, 'R') and hasattr(self, 'V'), "No mean quadratures or covariance matrices, can not build time evolved states!"    
+            
+            self.states_unconditional = []                                      # Use the unconditional arrays
+            
+            for i in range(self.N_time):
+                self.states_unconditional.append( gaussian_state(self.R[:, i], self.V[i]) );
         
     def steady_state(self, A_0=0, A_c=0, A_s=0, omega=0): # *args -> CONSERTAR !
         """
@@ -1524,7 +1582,7 @@ class gaussian_dynamics:
         ss = self.steady_state_internal; 
         return ss
     
-    def langevin_semi_classical(self, t_span, N_ensemble=2e+2):
+    def semi_classical(self, t_span, N_ensemble=2e+2):
         """
         Solve the semi-classical Langevin equation for the expectation value of the quadrature operators
         using a Monte Carlos simulation to numericaly integrate the Langevin equations
@@ -1544,7 +1602,7 @@ class gaussian_dynamics:
         self.t = t_span;                                                        # Timestamps for the simulation
         self.N_time = len(t_span);                                              # Number of timestamps
         
-        dt = self.t(2) - self.t(1);                                             # Time step
+        dt = self.t[2] - self.t[1];                                             # Time step
         sq_dt =  np.sqrt(dt);                                                   # Square root of time step (for Wiener proccess in the stochastic integration)
         
         noise_amplitude = self.N + np.sqrt( np.diag(self.D) );                  # Amplitude for the noises (square root of the auto correlations)
@@ -1565,12 +1623,152 @@ class gaussian_dynamics:
             X[:,0] = np.random.normal(mean_0, std_deviation_0)                  # Initial Cavity position quadrature (normal distribution for vacuum state)
             
             noise = np.random.standard_normal(X.shape);
-            for k in range(self.N_time):                                        # Euler-Maruyama method for stochastic integration
-                X[:,k+1] = X[:,k] + np.matmul(AA(self.t[k]), X[:,k])*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
+            for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration
+                X[:,k+1] = X[:,k] + (np.matmul(AA(self.t[k]), X[:,k]) + self.N)*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
                                    
             self.R_semi_classical = self.R_semi_classical + X;                  # Add the new  Monte Carlos iteration quadratures to the same matrix
         
         self.R_semi_classical = self.R_semi_classical/N_ensemble;               # Divide the ensemble sum to obtain the average quadratures at each time
- 
-
+    
+    def langevin_conditional(self, t_span, N_ensemble=200, rho_bath=gaussian_state(), C=0, Gamma=0, V_m=0):
+        """
+        Solve the conditional stochastic Langevin equation for the expectation value of the quadrature operators
+        using a Monte Carlos simulation to numericaly integrate the Langevin equations
+        
+        The initial conditions follows the initial state probability density in phase space
+        The differential stochastic equations are solved through a Euler-Maruyama method
+       
+        PARAMETERS:
+          self   - class instance
+          N_ensemble (optional) - number of iterations for Monte Carlos simulation, default value: 200
+       
+        CALCULATES:
+          self.R_semi_classical - matrix with the quadratures expectation values of the time evolved system where 
+          self.R_semi_classical(i,j) is the i-th quadrature expectation value at the j-th time
+        """
+        
+        N_ensemble = int(N_ensemble)
+        
+        self.t = t_span;                                                        # Timestamps for the simulation
+        self.N_time = len(t_span);                                              # Number of timestamps
+        
+        dt = self.t[2] - self.t[1];                                             # Time step
+        sq_dt_2 =  np.sqrt(dt)/2.0;                                                   # Square root of time step (for Wiener proccess in the stochastic integration)
+        
+        self.R_conditional = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
+        
+        if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
+            AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
+        else:
+            AA = lambda t: self.A;                                              # If A is does not vary in time, the new function always returns the same value 
+        
+        N_measured2 = C.shape[0]                                                 # Number of modes to be measured
+        C_T = np.transpose(C)
+        Gamma_T = np.transpose(Gamma)
+        
+        R_bath = np.reshape(rho_bath.R, (2,))                                   # Mean quadratures for the bath state
+        V_bath = rho_bath.V
+        
+        N = np.reshape(self.N, (2,))
+        
+        self.quantum_trajectories = N_ensemble*[None]                           # Preallocate memory to store the trajectories
+        
+        for i in range(N_ensemble):                                             # Loop on the random initial positions (# Monte Carlos simulation using Euler-Maruyama method in each iteration)
+            
+            X = np.zeros((self.Size_matrices, self.N_time));                    # Current quatum trajectory to be calculated, this matrix stores each quadrature at each time (first and second dimensions, respectively)
+            X[:,0] = np.reshape(self.initial_state.R, (2,))                     # Initial mean quadratures are exactly the same as the initial state (stochasticity only appear on the measurement outcomes)
+            
+            cov = (V_bath + V_m)/2.0                                            # Covariance for the distribution of the measurement outcome (R_m)
+            R_m = np.random.multivariate_normal(R_bath, cov, (self.N_time))     # Sort the measurement results
+            
+            for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration of the conditional Langevin equation
+                V = self.V_conditional[k]                                       # Get current covariance matrix (pre-calculated according to deterministic conditional Lyapunov equation)
+                dw = np.matmul(fractional_matrix_power(V_bath+V_m, -0.5), R_m[k,:] - R_bath) # Calculate the Wiener increment
+                
+                X[:,k+1] = X[:,k] + (np.matmul(AA(self.t[k]), X[:,k]) + N)*dt + sq_dt_2*np.matmul(np.matmul(V, C_T) + Gamma_T, dw) # Calculate the quantum trajectories following the stochastis conditional Langevin equation
+            
+            self.quantum_trajectories[i] = X                                    # Store each trajectory into class instance                
+            
+            self.R_conditional = self.R_conditional + X;                        # Add the new quantum trajectory in order to calculate the average
+        
+        self.R_conditional = self.R_conditional/N_ensemble;                     # Divide the ensemble sum to obtain the average quadratures at each time
+      
+    
+    def conditional_dynamics(self, t_span, N_ensemble=1e+2, C_int=None, rho_bath=gaussian_state(), s_list = [1], phi_list=None):
+        """
+        Calculates the time evolution of the initial state 
+        following an unconditional dynamics at the input timestamps.
+        
+        Independent measures in part of the modes
+        
+        PARAMETERS:
+            tspan    - numpy.ndarray with time stamps when the calculations should be done
+            C_int    - interaction matrix between system and bath
+            rho_bath - gaussian state of the bath
+            s        - list of measurement parameters for each measured mode (s=1: Heterodyne ; s=0: Homodyne in x-quadrature ; s=Inf: Homodyne in p-quadrature)
+            phi      - list of directions on phase space of the measurement for each measured mode
+            
+        CALCULATES:
+            result - array with time evolved gaussian states for each timestamp of the input argument t_span
+            each entry of the array is a gaussian_state class instance
+        """
+                
+        # Get rid of class attributes: R, V, R_conditional, V_conditional, ...
+        # and leave only:
+        # states_unconditional. states_conditional, steady_state_internal, 
+        # quantum_trajectories, and semiclassical_trajectories
+        
+        # Check quadrature normalization !
+        
+        N_measured = len(s_list)                                                # Number of modes to be measured
+        
+        if phi_list is None:                                                    # If no measurement direction was indicated, 
+            phi_list = N_measured*[0]                                           # use default value of 0 to all measured modes
+        
+        if C_int is None:                                                       # If no system-bath interaction bath was indicated, 
+            C_int = np.eye(2*N_measured)                                        # use as default value an identity matrix
+        
+        assert N_measured == len(phi_list), "conditional_dynamics can not infer the number of modes to be measured, number of measurement parameters is different from rotation angles"
+        
+        assert rho_bath.N_modes == N_measured, "The number of bath modes does not match the number of measured modes"
+        
+        Omega = self.initial_state.Omega
+        
+        V_bath = rho_bath.V                                                     # Covariance matrix for the bath's state
+        
+        V_m = 42                                                                # Just to initialize the variable, this value will be removed after the loop
+        for i in range(N_measured):                                             # For each measurement parameter
+            s = s_list[i]
+            temp = np.block([[s, 0],[0, 1/s]])                                  # Calculate the associated mode's covariance matrix after measurement
+            
+            phi = phi_list[i]                                                   # Get rotation of measurement angle
+            Rot = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+            Rot_T = np.transpose(Rot)
+            
+            temp = np.matmul( np.matmul(Rot, temp), Rot_T)                      # Rotate measured covariance matrix
+            
+            V_m = block_diag(temp, V_m)                                         # Build the covariance matrix of the tensor product of these modes
+        V_m = V_m[1:len(V_m), 1:len(V_m)]                                       # Remove the initialization value
+        
+        temp = fractional_matrix_power(V_bath + V_m, -0.5);
+        C_int_T = np.transpose(C_int);
+        
+        C = np.matmul(np.matmul(temp, Omega), C_int_T);                         # Extra matrix on the Lyapunov equation
+        
+        Gamma = -np.matmul(np.matmul(np.matmul(temp, V_bath), C_int_T), Omega); # Extra matrix on the Lyapunov equation
+        
+        is_conditional = True                                                   # Boolean telling auxiliar variable that the conditional dynamics is to be calculated
+        
+        status_lyapunov = self.lyapunov(t_span, is_conditional, C, Gamma);      # Calculate the deterministic dynamics for the CM for each timestamp (perform time integration of the Lyapunov equation)
+        
+        assert status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"
+        
+        N_ensemble = 2e+2                                                       # Number of iterations for the Monte Carlo method for the stochastic Langevin equation
+        
+        self.langevin_conditional(t_span, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
+        
+        self.build_states(is_conditional);                                      # Combine the time evolutions calculated above into an array of gaussian states
+      
+        result = self.states_conditional;
+        return result                                                           # Return the array of time evolved gaussian_state
 
