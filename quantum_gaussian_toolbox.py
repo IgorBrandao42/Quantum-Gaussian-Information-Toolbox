@@ -19,7 +19,8 @@ from scipy.linalg import sqrtm
 from scipy.linalg import fractional_matrix_power
 
 
-#import types
+################################################################################
+
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
     """
@@ -163,10 +164,13 @@ class gaussian_state:                                                           
         for rho in rho_list:                                                    # Loop through each state that is to appended
             R_final = np.vstack((R_final, rho.R))                               # Create its first moments
             V_final = block_diag(V_final, rho.V);
-      
-        rho = gaussian_state(R_final, V_final);                                 # Generate the gaussian state with these moments
-      
-        return rho
+        
+        temp = gaussian_state(R_final, V_final);                                 # Generate the gaussian state with these moments
+        
+        self.R = temp.R                                                         # Copy its attributes into the original instance
+        self.V = temp.V
+        self.Omega   = temp.Omega
+        self.N_modes = temp.N_modes
     
     def partial_trace(self, indexes):
         """
@@ -180,7 +184,7 @@ class gaussian_state:                                                           
         """
       
         N_A = int(len(self.R) - 2*len(indexes));                                    # Twice the number of modes in resulting state
-        assert N_A>=0, "Partial trace over more states than exists in gaussian state" 
+        assert N_A>=0, "Partial trace over more states than there exist in gaussian state" 
       
         # Shouldn't there be an assert over max(indexes) < obj.N_modes ? -> you cant trace out modes that do not exist
       
@@ -199,9 +203,13 @@ class gaussian_state:                                                           
             for j in range(len(modes)):
                 n = modes[j]
                 V0[(2*i):(2*i+2), (2*j):(2*j+2)] = self.V[(2*m):(2*m+2), (2*n):(2*n+2)]
-      
-        rho_A = gaussian_state(R0, V0)
-        return rho_A
+        
+        temp = gaussian_state(R0, V0);                                          # Generate the gaussian state with these moments
+        
+        self.R = temp.R                                                         # Copy its attributes into the original instance
+        self.V = temp.V
+        self.Omega   = temp.Omega
+        self.N_modes = temp.N_modes
     
     def only_modes(self, indexes):
       """
@@ -228,8 +236,12 @@ class gaussian_state:                                                           
                 n = indexes[j]
                 V0[(2*i):(2*i+2), (2*j):(2*j+2)] = self.V[(2*m):(2*m+2), (2*n):(2*n+2)]
       
-      rho_A = gaussian_state(R0, V0);
-      return rho_A
+      temp = gaussian_state(R0, V0);                                            # Generate the gaussian state with these moments
+        
+      self.R = temp.R                                                           # Copy its attributes into the original instance
+      self.V = temp.V
+      self.Omega   = temp.Omega
+      self.N_modes = temp.N_modes  
     
     def loss_ancilla(self,idx,tau):
         """
@@ -244,11 +256,14 @@ class gaussian_state:                                                           
             damped_state - final damped state
         """
 
-        damped_state = self.tensor_product([gaussian_state("vacuum")])
+        damped_state = tensor_product([self, gaussian_state("vacuum")])
         damped_state.beam_splitter(tau,[idx, damped_state.N_modes-1])
-        damped_state = damped_state.partial_trace([damped_state.N_modes-1])
+        damped_state.partial_trace([damped_state.N_modes-1])
         
-        return damped_state
+        self.R = damped_state.R                                                 # Copy the damped state's attributes into the original instance
+        self.V = damped_state.V
+        self.Omega   = damped_state.Omega
+        self.N_modes = damped_state.N_modes
     
     # Properties of the gaussian state
     def symplectic_eigenvalues(self):
@@ -338,14 +353,14 @@ class gaussian_state:                                                           
             S     - von Neumann entropy for the i-th mode    of the j-th covariance matrix
         """
         S = np.zeros((self.N_modes, 1));                                        # Variable to store the entropy of each mode
-      
+        
         for j in range(self.N_modes):                                           # Loop through each mode
-            single_mode = self.only_modes([j]);                                   # Get the covariance matrix for only the i-th mode
+            single_mode = only_modes(self, [j]);                                # Get the covariance matrix for only the i-th mode
             S[j] = single_mode.von_Neumann_Entropy();                           # von Neumann Entropy for i-th mode of each covariance matrix
-      
-        S_tot = self.von_Neumann_Entropy();                                      # von Neumann Entropy for the total system of each covariance matrix
-      
-        I = np.sum(S) - S_tot;                                                     # Calculation of the mutual information
+        
+        S_tot = self.von_Neumann_Entropy();                                     # von Neumann Entropy for the total system of each covariance matrix
+        
+        I = np.sum(S) - S_tot;                                                  # Calculation of the mutual information
         return I
     
     def occupation_number(self):
@@ -443,7 +458,7 @@ class gaussian_state:                                                           
             
             assert len(indexes) == 2, "Can only calculate the logarithmic negativity for a bipartition!"
                 
-            bipartition = self.only_modes(indexes)                              # Otherwise, get only the two mode specified by the user
+            bipartition = only_modes(self,indexes)                              # Otherwise, get only the two mode specified by the user
             V0 = bipartition.V                                                  # Take the full Covariance matrix of this subsystem
         else:
             raise TypeError('Unable to decide which bipartite entanglement to infer, please pass the indexes to the desired bipartition')
@@ -702,23 +717,25 @@ class gaussian_state:                                                           
            R_m      - first moments     of the conditional state after the measurement
            V_m      - covariance matrix of the conditional state after the measurement
            or
-           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+           rho_m    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
            Conditional and unconditional Gaussian quantum dynamics - Contemp. Phys. 57, 331 (2016)
         """
         if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
-            R_m = args[0].R;
-            V_m = args[0].V;
+            R_m   = args[0].R;
+            V_m   = args[0].V;
+            rho_m = args[0]
         else:                                                                   # If the input arguments are the conditional state's mean quadrature vector anc covariance matrix
             R_m = args[0];
             V_m = args[1];
+            rho_m = gaussian_state(R_m, V_m)
         
-        idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);               # Indexes to the modes that are to be measured
+        idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);          # Indexes to the modes that are to be measured
         
-        rho_B = self.only_modes(idx_modes);                                     # Get the mode measured mode in the global state previous to the measurement
-        rho_A = self.partial_trace(idx_modes);                                  # Get the other modes in the global state        previous to the measurement
+        rho_B = only_modes(self, idx_modes);                                    # Get the mode measured mode in the global state previous to the measurement
+        rho_A = partial_trace(self, idx_modes);                                 # Get the other modes in the global state        previous to the measurement
         
         n = 2*rho_A.N_modes;                                                    # Twice the number of modes in state A
         m = 2*rho_B.N_modes;                                                    # Twice the number of modes in state B
@@ -732,37 +749,44 @@ class gaussian_state:                                                           
         
         rho_A.V = rho_A.V - np.matmul(V_AB, np.matmul(inv_aux, V_AB.transpose()) );
         
-        return rho_A
+        rho_A.tensor_product([rho_m])                                           # Generate the post measurement gaussian state
+        
+        self.R = rho_A.R                                                        # Copy its attributes into the original instance
+        self.V = rho_A.V
+        self.Omega   = rho_A.Omega
+        self.N_modes = rho_A.N_modes
     
     def measurement_homodyne(self, *args):
         """
         After a homodyne measurement is performed on the last m modes of a (n+m)-mode gaussian state
         this method calculates the conditional state the remaining n modes evolve into
         
-        The user must provide the gaussian_state of the measured m-mode state or its mean value
+        The user must provide the gaussian_state of the measured m-mode state or its mean quadrature vector
         
         At the moment, this method can only perform the measurement on the last modes of the global state,
         if you know how to perform this task on a generic mode, contact me so I can implement it! :)
        
         ARGUMENTS:
-           R_m      - first moments     of the conditional state after the measurement
-           V_m      - covariance matrix of the conditional state after the measurement
+           R_m      - first moments of the conditional state after the measurement (assumes measurement on position quadrature
            or
-           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+           rho_m    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
         """
       
         if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
-            R_m = args[0].R;
+            R_m   = args[0].R;
+            rho_m = args[0]
         else:                                                                   # If the input argument is the mean quadrature vector
             R_m = args[0];
+            V_m = args[1];
+            rho_m = gaussian_state(R_m, V_m)
         
         idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);          # Indexes to the modes that are to be measured
         
-        rho_B = self.only_modes(idx_modes);                                     # Get the mode measured mode in the global state previous to the measurement
-        rho_A = self.partial_trace(idx_modes);                                  # Get the other modes in the global state        previous to the measurement
+        rho_B = only_modes(self, idx_modes);                                    # Get the mode measured mode in the global state previous to the measurement
+        rho_A = partial_trace(self, idx_modes);                                 # Get the other modes in the global state        previous to the measurement
         
         n = 2*rho_A.N_modes;                                                    # Twice the number of modes in state A
         m = 2*rho_B.N_modes;                                                    # Twice the number of modes in state B
@@ -773,7 +797,13 @@ class gaussian_state:                                                           
         
         rho_A.R = rho_A.R - np.matmul(V_AB, np.matmul(MP_inverse, rho_B.R - R_m   ) ); # Update the other modes conditioned on the measurement results
         rho_A.V = rho_A.V - np.matmul(V_AB, np.matmul(MP_inverse, V_AB.transpose()) );
-        return rho_A
+        
+        rho_A.tensor_product([rho_m])                                           # Generate the post measurement gaussian state
+        
+        self.R = rho_A.R                                                        # Copy its attributes into the original instance
+        self.V = rho_A.V
+        self.Omega   = rho_A.Omega
+        self.N_modes = rho_A.N_modes
     
     def measurement_heterodyne(self, *args):
         """
@@ -788,19 +818,19 @@ class gaussian_state:                                                           
         ARGUMENTS:
            alpha    - complex amplitude of the coherent state after the measurement
            or
-           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+           rho_m    - conditional gaussian state after the measurement on the last m modes (rho_m.N_modes = m)
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
         """
         
         if isinstance(args[0], gaussian_state):                                 # If the input argument is  a gaussian_state
-            rho_B = args[0];
+            rho_m = args[0];
         else:
-            rho_B = gaussian_state("coherent", args[0]);
+            rho_m = gaussian_state("coherent", args[0]);
         
-        rho_A = self.measurement_general(rho_B);
-        return rho_A
+        self.measurement_general(rho_m);
+        
     
     # Phase space representation
     def wigner(self, X, P):
@@ -907,7 +937,6 @@ class gaussian_state:                                                           
         return q_func
     
     # Density matrix elements
-    
     def density_matrix_coherent_basis(self, alpha, beta):
         """
         Calculates the matrix elements of the density operator on the coherent state basis
@@ -1123,7 +1152,11 @@ class gaussian_state:                                                           
                 P.ravel()[int(nextCoord)] = P.ravel()[int(nextCoord)]/np.math.factorial(int(nextP[kk]-1));
         
         return P
-    
+
+
+################################################################################
+
+
 def Hermite_multidimensional_original(R, y, n_cutoff=10):
     """
     Calculates the multidimensional Hermite polynomial H_m^R(y) from m = (0, ..., 0) up to (n_cutoff, ..., n_cutoff)
@@ -1194,8 +1227,6 @@ def Hermite_multidimensional_original(R, y, n_cutoff=10):
 
     H = H.real                                                                  # Get rid off any residual complex value
     
-    return H
-
 def Hermite_multidimensional(R, y, n_cutoff=10):
     """
     Calculates the multidimensional Hermite polynomial H_m^R(y) from m = (0, ..., 0) up to (n_cutoff, ..., n_cutoff)
@@ -1315,6 +1346,10 @@ def lyapunov_ode_conditional(t, V_old_vector, A, D, C, Gamma):
     
     dVdt_vector = np.reshape(dVdt, (M**2,));                                    # Matrix -> vector
     return dVdt_vector
+
+
+################################################################################
+
 
 class gaussian_dynamics:
     """
@@ -1771,4 +1806,145 @@ class gaussian_dynamics:
       
         result = self.states_conditional;
         return result                                                           # Return the array of time evolved gaussian_state
+
+
+################################################################################
+
+
+# Construct another state, from a base gaussian_state
+def tensor_product(rho_list):
+    state_copy = rho_list[0].copy()
+    state_copy.tensor_product(rho_list[1:])
+    
+    return state_copy
+
+def partial_trace(state, indexes):
+    state_copy = state.copy()
+    state_copy.partial_trace(indexes)
+    
+    return state_copy
+
+def only_modes(state, indexes):
+    state_copy = state.copy()
+    state_copy.only_modes(indexes)
+    
+    return state_copy
+
+def check_uncertainty_relation(state):
+    return state.check_uncertainty_relation()
+
+def loss_ancilla(state,idx,tau):
+    state_copy = state.copy()
+    state_copy.loss_ancilla(state,idx,tau)
+    
+    return state_copy
+
+
+# Properties of a gaussian state
+def symplectic_eigenvalues(state):
+    return state.symplectic_eigenvalues()
+
+def purity(state):
+    return state.purity()
+
+def squeezing_degree(state):
+    return state.squeezing_degree()
+
+def von_Neumann_Entropy(state):
+    return state.von_Neumann_Entropy()
+
+def mutual_information(state):
+    return state.mutual_information()
+
+def occupation_number(state):
+    return state.occupation_number()
+
+def number_operator_moments(state):
+    return state.number_operator_moments()
+
+def coherence(state):
+    return state.coherence()
+
+def logarithmic_negativity(state, *args):
+    return state.logarithmic_negativity(*args)
+
+def fidelity(rho_1, rho_2):
+    return rho_1.fidelity(rho_2)
+
+# Density matrix elements
+def density_matrix_coherent_basis(state, alpha, beta):
+    return state.coherence(alpha, beta)
+
+def density_matrix_number_basis(state, n_cutoff=10):
+    return state.density_matrix_number_basis(n_cutoff)
+
+def number_statistics(state, n_cutoff=10):
+    return state.number_statistics(n_cutoff)
+
+
+# Gaussian unitaries (applicable to single mode states)
+def displace(state, alpha, modes=[0]):
+    state_copy = state.copy()
+    state_copy.displace(alpha, modes)
+    
+    return state_copy
+
+def squeeze(state, r, modes=[0]):
+    state_copy = state.copy()
+    state_copy.squeeze(r, modes)
+    
+    return state_copy
+
+def rotate(state, theta, modes=[0]):
+    state_copy = state.copy()
+    state_copy.rotate(theta, modes)
+    
+    return state_copy 
+
+def phase(state, theta, modes=[0]):
+    state_copy = state.copy()
+    state_copy.phase(theta, modes)
+    
+    return state_copy
+
+# Gaussian unitaries (applicable to two mode states)
+def beam_splitter(state, tau, modes=[0, 1]):
+    state_copy = state.copy()
+    state_copy.beam_splitter(tau, modes)
+    
+    return state_copy
+
+def two_mode_squeezing(state, r, modes=[0, 1]):
+    state_copy = state.copy()
+    state_copy.two_mode_squeezing(r, modes)
+    
+    return state_copy
+
+# Generic multimode gaussian unitary
+def apply_unitary(state, S, d):
+    state_copy = state.copy()
+    state_copy.apply_unitary(S, d)
+    
+    return state_copy
+
+
+# Gaussian measurements
+def measurement_general(state, *args):
+    state_copy = state.copy()
+    state_copy.measurement_general(*args)
+    
+    return state_copy
+
+def measurement_homodyne(state, *args):
+    state_copy = state.copy()
+    state_copy.measurement_homodyne(*args)
+    
+    return state_copy
+
+def measurement_heterodyne(state, *args):
+    state_copy = state.copy()
+    state_copy.measurement_heterodyne(*args)
+    
+    return state_copy
+
 
