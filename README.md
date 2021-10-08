@@ -128,7 +128,7 @@ The toolbox makes use of the Numpy and Scipy packages.
 Clone this repository or download **quantum_gaussian_toolbox.py** file to your project folder and import the toolbox:
 
 ```python
-from quantum_gaussian_toolbox import *
+import quantum_gaussian_toolbox as qgt
 ```
 
 # Running Example
