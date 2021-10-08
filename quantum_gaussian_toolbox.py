@@ -23,8 +23,7 @@ from scipy.linalg import fractional_matrix_power
 
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
-    """
-    Class simulation of a multimode gaussian state
+    """Class simulation of a multimode gaussian state
     
     ATTRIBUTES:
         self.R       - Mean quadratures vector
@@ -36,24 +35,17 @@ class gaussian_state:                                                           
     # Constructor and its auxiliar functions    
     def __init__(self, *args):
         """
-        Constructor for a class instance simulating a gaussian state 
-        with mean quadratures and covariance matrix
-        
         The user can explicitly pass the first two moments of a multimode gaussian state
         or pass a name-value pair argument to choose a single mode gaussian state
         
         PARAMETERS:
-            R0 - mean quadratures for gaussian state
-            V0 - covariance matrix for gaussian state
+            R0, V0 - mean quadratures vector and covariance matrix of a gaussian state (ndarrays)
             
-        Alternatively, the user may pass a name-value pair argument 
-        to create an elementary single mode gaussian state, see below.
-        
         NAME-VALUE PAIR ARGUMENTS:
-          "vacuum"                        - generates vacuum   state
-          "thermal" , occupation number   - generates thermal  state
-          "coherent", complex amplitude   - generates coherent state
-          "squeezed", squeezing parameter - generates squeezed state
+            "vacuum"                        - generates vacuum   state (string)
+            "thermal" , occupation number   - generates thermal  state (string, float)
+            "coherent", complex amplitude   - generates coherent state (string, complex)
+            "squeezed", squeezing parameter - generates squeezed state (string, float)
         """
 
         if(len(args) == 0):                                                     # Default constructor (vacuum state)
@@ -1352,51 +1344,48 @@ def lyapunov_ode_conditional(t, V_old_vector, A, D, C, Gamma):
 
 
 class gaussian_dynamics:
-    """
-    Class simulating the time evolution of a gaussian state following a set of 
-    Langevin and Lyapunov equations for its first moments dynamics
+    """Class simulating unconditional and conditional dynamics of a gaussian state following a set of Langevin and Lyapunov equations
     
     ATTRIBUTES
-        A                     - Drift matrix (can be a lambda functions to have a time dependency!)
+        A                     - Drift matrix (can be a callable lambda functions to have a time dependency!)
         D                     - Diffusion Matrix 
         N                     - Mean values of the noises
         initial_state         - Initial state of the global system
         t                     - Array with timestamps for the time evolution
         
         is_stable             - Boolean telling if the system is stable or not
-        R_semi_classical      - Array with semi-classical mean quadratures (Semi-classical time evolution using Monte Carlos method)
-        R                     - Array with mean quadratures  for each time
-        V                     - Cell  with covariance matrix for each time
-        state                 - Gaussian state               for each time
-                                                                                    
         N_time                - Length of time array
         Size_matrices         - Size of covariance, diffusion and drift matrices
+        
+        states_unconditional  - List of time evolved states following unconditional dynamics
+        states_conditional    - List of time evolved states following   conditional dynamics (mean quadratures are the average of the trajectories from the quantum monte carlo method)
         steady_state_internal - Steady state
+        
+        quantum_trajectories        - Quantum trajectories from the Monte Carlo method for the conditional dynamics
+        semi_classical_trajectories - List of time evolved semi-classical mean quadratures (Semi-classical Monte Carlo method)
     """
     
     def __init__(self, A_0, D_0, N_0, initial_state_0):
-        """
-        Class constructor for simulating the time evolution of the global system
-        open/closed quantum dynamics dictated by Langevin and Lyapunov equations
+        """Class constructor for simulating the time evolution of the multimode systems following open unconditional and conditional quantum dynamics dictated by Langevin and Lyapunov equations
         
         Langevin: \dot{R} = A*X + N           : time evolution of the mean quadratures
        
         Lyapunov: \dot{V} = A*V + V*A^T + D   : time evolution of the covariance matrix
        
         PARAMETERS:
-           A_0           - Drift matrix     (numerical matrix or lambda functions for a matrix with time dependency
+           A_0           - Drift matrix     (numerical matrix or callable function for a time-dependent matrix)
            D_0           - Diffusion Matrix (auto correlation of the noises, assumed to be delta-correlated in time)
            N_0           - Mean values of the noises
            initial_state - Cavity linewidth
        
-        CALCULATES:
+        BUILDS:
            self           - instance of a time_evolution class
            self.is_stable - boolean telling if the system is stable or not
         """
       
-        self.A = A_0;  # .copy() ?                                                           # Drift matrix
-        self.D = D_0;  # .copy() ?                                                          # Diffusion Matrix
-        self.N = N_0.reshape((len(N_0),1));   # .copy() ?                                                         # Mean values of the noises
+        self.A = A_0;  # .copy() ?                                              # Drift matrix
+        self.D = D_0;  # .copy() ?                                              # Diffusion Matrix
+        self.N = N_0.reshape((len(N_0),1));   # .copy() ?                       # Mean values of the noises
         
         self.initial_state = initial_state_0;                                   # Initial state of the global system
         
@@ -1410,79 +1399,68 @@ class gaussian_dynamics:
             self.is_stable = not is_not_stable                                  # Store the information of the stability of the system in a class attribute
     
     def unconditional_dynamics(self, t_span):
-        """
-        Calculates the time evolution of the initial state 
-        following an unconditional dynamics at the input timestamps.
+        """Calculates the time evolution of the initial state following an unconditional dynamics at the input timestamps.
         
-        
-        PARAMETERS:
-            self   - class instance
-            tspan - Array with time stamps when the calculations should be done
+       PARAMETERS:
+           tspan - Array with time stamps when the calculations should be done
        
-        CALCULATES:
-            result = array with time evolved gaussian states for each timestamp of the input argument t_span
-            each entry of the array is a gaussian_state class instance
+       CALCULATES: 
+           self.states_conditional - list of gaussian_state instances with the time evolved gaussian states for each timestamp of the input argument t_span
+       
+        RETURNS:
+            result - list of gaussian_state instances with the time evolved gaussian states for each timestamp of the input argument t_span
         """
       
-        status_langevin = self.langevin(t_span);                                                  # Calculate the mean quadratures for each timestamp
+        R_evolved, status_langevin = self.langevin(t_span);                     # Calculate the mean quadratures for each timestamp
       
-        status_lyapunov = self.lyapunov(t_span);                                                  # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
+        V_evolved, status_lyapunov = self.lyapunov(t_span);                     # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
         
-        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"         # Make sure the parameters for the time evolution are on the correct order of magnitude!
+        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution of the unconditional dynamics - Integration step failed"         # Make sure the parameters for the time evolution are on the correct order of magnitude!
+                
+        self.states_unconditional = []                                          # Combine the time evolutions calculated above into an array of gaussian states
+        for i in range(self.N_time):
+            self.states_unconditional.append( gaussian_state(R_evolved[:, i], V_evolved[i]) );
         
-        self.build_states(is_conditional=False);                                                    # Combine the time evolutions calculated above into an array of gaussian states
-      
         result = self.states_unconditional;
         return result                                                           # Return the array of time evolved gaussian_state following unconditional dynamics
     
     def langevin(self, t_span):
-        """
-        Solve the Langevin equation for the time evolved mean quadratures of the full system
+        """Solve quantum Langevin equations for the time evolved mean quadratures of the multimode systems
        
         Uses ode45 to numerically integrate the average Langevin equations (a fourth order Runge-Kutta method)
        
         PARAMETERS:
-            self   - class instance
-            t_span - timestamps when the time evolution is to be calculated
+            t_span - timestamps when the time evolution is to be calculated (ndarray)
        
         CALCULATES:
-            self.R - a cell with the time evolved mean quadratures where
-            self.R(i,j) is the i-th mean quadrature at the j-th timestamp
+            self.R - a cell with the time evolved mean quadratures where self.R(i,j) is the i-th mean quadrature at the j-th timestamp
         """
         self.t = t_span;                                                        # Timestamps for the simulation
         self.N_time = len(t_span);                                              # Number of timestamps
         
-        if is_a_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
+        if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
             langevin_ode = lambda t, R: np.reshape(np.matmul(self.A(t), R.reshape((len(R),1))) + self.N, (len(R),))        # Function handle that defines the Langevin equation (returns the derivative)
         else:
             langevin_ode = lambda t, R: np.reshape(np.matmul(self.A, np.reshape(R, (len(R),1))) + self.N, (len(R),))           # Function handle that defines the Langevin equation (returns the derivative)
         
-        # np.reshape(np.matmul(self.A, R.reshape((len(R),1))) + self.N, (len(R),))
-        
         solution_langevin = solve_ivp(langevin_ode, [t_span[0], t_span[-1]], np.reshape(self.initial_state.R, (self.Size_matrices,)), t_eval=t_span) # Solve Langevin eqaution through Runge Kutta(4,5)
         # Each row in R corresponds to the solution at the value returned in the corresponding row of self.t
         
-        self.R = solution_langevin.y;                                           # Store the time evolved quadratures in a class attribute
+        R_evolved = solution_langevin.y;                                        # Store the time evolved quadratures in a class attribute
         
-        return solution_langevin.status
-        #  fprintf("Langevin simulation finished!\n\n")                         # Warn user the heavy calculations ended
+        return R_evolved, solution_langevin.status
     
     def lyapunov(self, t_span, is_conditional=False, C=0, Gamma=0):
-        """
-        Solve the lyapunov equation for the time evolved covariance matrix of the full system
+        """Solve the lyapunov equation for the time evolved covariance matrix of the full system (both conditional and unconditional cases)
        
-        Uses ode45 to numerically integrate, a fourth order Runge-Kutta method
+        Uses ode45 to numerically integrate the Lyapunov equation, a fourth order Runge-Kutta method
        
         PARAMETERS:
-            self   - class instance
             t_span - timestamps when the time evolution is to be calculated
        
         CALCULATES:
-            'self.V' - a cell with the time evolved covariance matrix where
-             self.V{j} is the covariance matrix at the j-th timestamp
+            'self.V' - a cell with the time evolved covariance matrix where self.V[j] is the covariance matrix at the j-th timestamp in t_span
         """
-      
-        # disp("Lyapunov simulation started...")                                # Warn the user that heavy calculations started (their computer did not freeze!)
         
         self.t = t_span;                                                        # Timestamps for the simulation
         self.N_time = len(t_span);                                              # Number of timestamps
@@ -1502,97 +1480,60 @@ class gaussian_dynamics:
                 
         solution_lyapunov = solve_ivp(ode, [t_span[0], t_span[-1]], V_0_vector, t_eval=t_span) # Solve Lyapunov equation through Fourth order Runge Kutta
         
-        # Unpack the output of ode45 into a cell where each entry contains the information about the evolved CM at each time
-        if is_conditional:
-            self.V_conditional = [];                                            # Initialize a cell to store all CMs for each time
+        # Unpack the output of ode45 into a list where each entry contains the information about the evolved CM at each time
+        V_evolved = []                                                          # Initialize a cell to store the time evolvd CMs for each time
         
-            for i in range(len(solution_lyapunov.t)):
-                V_current_vector = solution_lyapunov.y[:,i];                                        # Take the full Covariance matrix in vector form
-                V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
-                self.V_conditional.append(V_current);                                             # Append it on the class attribute
-        else:
-            self.V = [];                                                        # Initialize a cell to store all CMs for each time
-        
-            for i in range(len(solution_lyapunov.t)):
-                V_current_vector = solution_lyapunov.y[:,i];                                        # Take the full Covariance matrix in vector form
-                V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
-                self.V.append(V_current);                                                           # Append it on the class attribute
-            
-        return solution_lyapunov.status
-    
-    def build_states(self, is_conditional=False):
-        """
-        Builds the gaussian state at each time from their mean values and covariance matrices
-        This funciton is completely unnecessary, but it makes the code more readable :)
-       
-        CALCULATES:
-          self.state - array with time evolved gaussian states for each timestamp of the input argument t_span
-          each entry of the array is a gaussian_state class instance
-        """
-        
-        if is_conditional:                                                      # If  the conditional dynamics was calculated
-            
-            assert hasattr(self, 'R_conditional') and hasattr(self, 'V_conditional'), "No conditional mean quadratures or covariance matrices, can not build time evolved states!"
-            
-            self.states_conditional = []                                        # Use the conditional arrays
-            
-            for i in range(self.N_time):
-                self.states_conditional.append( gaussian_state(self.R_conditional[:, i], self.V_conditional[i]) );
-                
-        else:                                                                   # If  the unconditional dynamics was calculated
-            
-            assert hasattr(self, 'R') and hasattr(self, 'V'), "No mean quadratures or covariance matrices, can not build time evolved states!"    
-            
-            self.states_unconditional = []                                      # Use the unconditional arrays
-            
-            for i in range(self.N_time):
-                self.states_unconditional.append( gaussian_state(self.R[:, i], self.V[i]) );
+        for i in range(len(solution_lyapunov.t)):
+            V_current_vector = solution_lyapunov.y[:,i];                                        # Take the full Covariance matrix in vector form
+            V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
+            V_evolved.append(V_current);                                                        # Append it on the class attribute
+                    
+        return V_evolved, solution_lyapunov.status
         
     def steady_state(self, A_0=0, A_c=0, A_s=0, omega=0): # *args -> CONSERTAR !
-        """
-        Calculates the steady state for the system
+        """Calculates the steady state for the multimode system
        
-        PARAMETERS:
-          self   - class instance
-        
-          The next parameters are only necessary if the drift matrix has a time dependency (and it is periodic)
-          A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
-          omega - Frequency of the drift matrix
+        PARAMETERS (only needed if the drift matrix has a periodic time dependency):
+          A_0, A_c, A_s - Components of the Floquet decomposition of the drift matrix
+          omega         - Frequency of the drift matrix
         
         CALCULATES:
-          self.steady_state_internal with the steady state (gaussian_state)
-          ss - gaussian_state with steady state of the system
+            self.steady_state_internal - gaussian_state with steady state of the system
+          
+        RETURNS:
+            ss - gaussian_state with steady state of the system
         """
       
         if is_a_function(self.A):                                               # If the Langevin and Lyapunov eqs. have a time dependency, move to the Floquet solution
             ss = self.floquet(A_0, A_c, A_s, omega);
-            self.steady_state_internal = ss;
-        else :                                                                  # If the above odes are time independent, 
+            self.steady_state_internal = ss;                                    # Store it in the class instance
+        
+        else:                                                                   # If the above odes are time independent, 
             assert self.is_stable, "There is no steady state covariance matrix, as the system is not stable!"  # Check if there exist a steady state!
         
-        R_ss = np.linalg.solve(self.A, -self.N);                                # Calculate steady-state mean quadratures
-        V_ss = solve_continuous_lyapunov(self.A, -self.D);                      # Calculate steady-state covariance matrix
+            R_ss = np.linalg.solve(self.A, -self.N);                            # Calculate steady-state mean quadratures
+            V_ss = solve_continuous_lyapunov(self.A, -self.D);                  # Calculate steady-state covariance matrix
         
-        self.steady_state_internal = gaussian_state(R_ss, V_ss);                # Generate the steady state
-        ss = self.steady_state_internal;                                        
+            ss = gaussian_state(R_ss, V_ss);                                    # Generate the steady state
+            self.steady_state_internal = ss;                                    # Store it in the class instance
+            
         return ss                                                               # Return the gaussian_state with the steady state for this system
-        return ss
     
     def floquet(self, A_0, A_c, A_s, omega):
-        """
-        Calculates the staeady state of a system with periodic Hamiltonin/drift matrix
+        """Calculates the staeady state of a system with periodic Hamiltonin/drift matrix
+        
         Uses first order approximation in Floquet space for this calculation
        
         Higher order approximations will be implemented in the future
         
         PARAMETERS:
-          self   - class instance
-        
           A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
           omega - Frequency of the drift matrix
         
         CALCULATES:
-          self.steady_state_internal with the steady state (gaussian_state)
+          self.steady_state_internal - gaussian_state with steady state of the system
+          
+        RETURNS:
           ss - gaussian_state with steady state of the system
         """
       
@@ -1613,20 +1554,19 @@ class gaussian_dynamics:
         R_ss = R_ss_F[0:M];                                                     # Get only the first entries
         V_ss = V_ss_F[0:M, 0:M];                                                # Get only the first sub-matrix
         
-        self.steady_state_internal = gaussian_state(R_ss, V_ss); # Generate the steady state
-        ss = self.steady_state_internal; 
+        ss = gaussian_state(R_ss, V_ss);                                        # Generate the steady state
+        self.steady_state_internal = ss;                                        # Store it in the class instance
+        
         return ss
     
     def semi_classical(self, t_span, N_ensemble=2e+2):
-        """
-        Solve the semi-classical Langevin equation for the expectation value of the quadrature operators
-        using a Monte Carlos simulation to numericaly integrate the Langevin equations
+        """Solve the semi-classical Langevin equation for the expectation value of the quadrature operators using a Monte Carlos simulation to numericaly integrate the Langevin equations
         
         The initial conditions follows the initial state probability density in phase space
         The differential stochastic equations are solved through a Euler-Maruyama method
        
         PARAMETERS:
-          self   - class instance
+          t_span - timestamps when the time evolution is to be calculated
           N_ensemble (optional) - number of iterations for Monte Carlos simulation, default value: 200
        
         CALCULATES:
@@ -1645,7 +1585,7 @@ class gaussian_dynamics:
         mean_0 = self.initial_state.R;                                          # Initial mean value
         std_deviation_0 =  np.sqrt( np.diag(self.initial_state.V) );            # Initial standard deviation
         
-        self.R_semi_classical = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
+        self.semi_classical_trajectories = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
         
         if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
             AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
@@ -1661,25 +1601,32 @@ class gaussian_dynamics:
             for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration
                 X[:,k+1] = X[:,k] + (np.matmul(AA(self.t[k]), X[:,k]) + self.N)*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
                                    
-            self.R_semi_classical = self.R_semi_classical + X;                  # Add the new  Monte Carlos iteration quadratures to the same matrix
+            self.semi_classical_trajectories = self.semi_classical_trajectories + X;    # Add the new  Monte Carlos iteration quadratures to the same matrix
         
-        self.R_semi_classical = self.R_semi_classical/N_ensemble;               # Divide the ensemble sum to obtain the average quadratures at each time
-    
+        self.semi_classical_trajectories = self.semi_classical_trajectories/N_ensemble; # Divide the ensemble sum to obtain the average quadratures at each time
+        
+        result = self.semi_classical_trajectories
+        return result
+        
     def langevin_conditional(self, t_span, N_ensemble=200, rho_bath=gaussian_state(), C=0, Gamma=0, V_m=0):
-        """
-        Solve the conditional stochastic Langevin equation for the expectation value of the quadrature operators
-        using a Monte Carlos simulation to numericaly integrate the Langevin equations
+        """Solve the conditional stochastic Langevin equation for the expectation value of the quadrature operators
+        using a Monte Carlos simulation to numericaly integrate the stochastic Langevin equations
         
-        The initial conditions follows the initial state probability density in phase space
         The differential stochastic equations are solved through a Euler-Maruyama method
        
         PARAMETERS:
-          self   - class instance
-          N_ensemble (optional) - number of iterations for Monte Carlos simulation, default value: 200
+          t_span     - timestamps when the time evolution is to be calculated
+          N_ensemble - number of iterations for Monte Carlos simulation, default value: 200
+          rho_bath   - gaussian_state with the quantum state of the environment's state
+          C          - matrix describing the measurement process (see conditional_dynamics)
+          Gamma      - matrix describing the measurement process (see conditional_dynamics)
+          V_m        - Covariance matrix of the post measurement state
        
         CALCULATES:
-          self.R_semi_classical - matrix with the quadratures expectation values of the time evolved system where 
-          self.R_semi_classical(i,j) is the i-th quadrature expectation value at the j-th time
+          self.quantum_trajectories - list of single realizations of the quantum Monte Carlo method for the mean quadrature vector
+        
+        RETURN:
+          R_conditional - average over the trajectories of the quadrature expectation values
         """
         
         N_ensemble = int(N_ensemble)
@@ -1688,9 +1635,9 @@ class gaussian_dynamics:
         self.N_time = len(t_span);                                              # Number of timestamps
         
         dt = self.t[2] - self.t[1];                                             # Time step
-        sq_dt_2 =  np.sqrt(dt)/2.0;                                                   # Square root of time step (for Wiener proccess in the stochastic integration)
+        sq_dt_2 =  np.sqrt(dt)/2.0;                                             # Square root of time step (for Wiener proccess in the stochastic integration)
         
-        self.R_conditional = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
+        R_conditional = np.zeros((self.Size_matrices, self.N_time));            # Matrix to store each quadrature ensemble average at each time
         
         if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
             AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
@@ -1724,17 +1671,16 @@ class gaussian_dynamics:
             
             self.quantum_trajectories[i] = X                                    # Store each trajectory into class instance                
             
-            self.R_conditional = self.R_conditional + X;                        # Add the new quantum trajectory in order to calculate the average
+            R_conditional = R_conditional + X;                                  # Add the new quantum trajectory in order to calculate the average
         
-        self.R_conditional = self.R_conditional/N_ensemble;                     # Divide the ensemble sum to obtain the average quadratures at each time
-      
+        R_conditional = R_conditional/N_ensemble;                               # Divide the ensemble sum to obtain the average quadratures at each time
+        
+        return R_conditional
     
     def conditional_dynamics(self, t_span, N_ensemble=1e+2, C_int=None, rho_bath=gaussian_state(), s_list = [1], phi_list=None):
-        """
-        Calculates the time evolution of the initial state 
-        following an unconditional dynamics at the input timestamps.
+        """Calculates the time evolution of the initial state following a conditional dynamics at the input timestamps
         
-        Independent measures in part of the modes
+        Independent measurements can be applied to the last k modes of the multimode gassian state with N modes
         
         PARAMETERS:
             tspan    - numpy.ndarray with time stamps when the calculations should be done
@@ -1744,16 +1690,13 @@ class gaussian_dynamics:
             phi      - list of directions on phase space of the measurement for each measured mode
             
         CALCULATES:
-            result - array with time evolved gaussian states for each timestamp of the input argument t_span
-            each entry of the array is a gaussian_state class instance
+            self.states_conditional - list of time evolved gaussian_state for each timestamp of the input argument t_span
+            
+        RETURNS:
+            result - list of time evolved gaussian_state for each timestamp of the input argument t_span
         """
-                
-        # Get rid of class attributes: R, V, R_conditional, V_conditional, ...
-        # and leave only:
-        # states_unconditional. states_conditional, steady_state_internal, 
-        # quantum_trajectories, and semiclassical_trajectories
         
-        # Check quadrature normalization !
+        # TODO: Check quadrature normalization !
         
         N_measured = len(s_list)                                                # Number of modes to be measured
         
@@ -1767,7 +1710,7 @@ class gaussian_dynamics:
         
         assert rho_bath.N_modes == N_measured, "The number of bath modes does not match the number of measured modes"
         
-        Omega = self.initial_state.Omega
+        Omega = self.initial_state.Omega                                        # Rename symplectic form matrix
         
         V_bath = rho_bath.V                                                     # Covariance matrix for the bath's state
         
@@ -1785,8 +1728,8 @@ class gaussian_dynamics:
             V_m = block_diag(temp, V_m)                                         # Build the covariance matrix of the tensor product of these modes
         V_m = V_m[1:len(V_m), 1:len(V_m)]                                       # Remove the initialization value
         
-        temp = fractional_matrix_power(V_bath + V_m, -0.5);
-        C_int_T = np.transpose(C_int);
+        temp = fractional_matrix_power(V_bath + V_m, -0.5);                     # Auxiliar variable
+        C_int_T = np.transpose(C_int);                                          # Transpose of interaction matrix (auxiliar variable)
         
         C = np.matmul(np.matmul(temp, Omega), C_int_T);                         # Extra matrix on the Lyapunov equation
         
@@ -1794,15 +1737,15 @@ class gaussian_dynamics:
         
         is_conditional = True                                                   # Boolean telling auxiliar variable that the conditional dynamics is to be calculated
         
-        status_lyapunov = self.lyapunov(t_span, is_conditional, C, Gamma);      # Calculate the deterministic dynamics for the CM for each timestamp (perform time integration of the Lyapunov equation)
+        V_evolved, status_lyapunov = self.lyapunov(t_span, is_conditional, C, Gamma);       # Calculate the deterministic dynamics for the CM for each timestamp (perform time integration of the Lyapunov equation)
         
-        assert status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"
+        assert status_lyapunov != -1, "Unable to perform the time evolution of the covariance matrix through Lyapunov equation - Integration step failed"
         
-        N_ensemble = 2e+2                                                       # Number of iterations for the Monte Carlo method for the stochastic Langevin equation
+        R_evolved = self.langevin_conditional(t_span, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
         
-        self.langevin_conditional(t_span, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
-        
-        self.build_states(is_conditional);                                      # Combine the time evolutions calculated above into an array of gaussian states
+        self.states_conditional = []                                            # Combine the time evolutions calculated above into an array of gaussian states
+        for i in range(self.N_time):
+            self.states_conditional.append( gaussian_state(R_evolved[:, i], V_evolved[i]) );        
       
         result = self.states_conditional;
         return result                                                           # Return the array of time evolved gaussian_state
