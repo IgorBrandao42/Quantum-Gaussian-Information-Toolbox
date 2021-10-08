@@ -1,7 +1,11 @@
 
-# Gaussian Quantum Information Numerical Toolbox (Python)
+# QuGIT: Quantum Gaussian Information Toolbox
 
-This is a object-oriented Python library aimed at simulating any multimode quantum gaussian states, findiing their time evolution according to sets of quantum Langevin and Lyapunov equations and recovering the information about these states.
+QuGIT is an open-sourced object-oriented Python library aimed at simulating multimode quantum gaussian states, finding their unconditional or conditional time evolution according to sets of quantum Langevin and Lyapunov equations and recovering information about these states.
+
+The toolbox takes advantage of the symmetry of gaussian quantum states to efficiently simulate them without the need to work with truncated Hilbert spaces.
+
+
 
 ## gaussian_state class
 Gaussian states are a particular class of continuous variable states that can be completelly described by their quadratures' first and second moments [[Rev. Mod. Phys. 84, 621]](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621).  The toolbox is able to simulate any gaussian state through the class 'gaussian_state' whose input can be
@@ -117,7 +121,7 @@ The method 'run' returns the time evolved state (array of gaussian_state instanc
 
 ## Dependencies
 
-This toolbox makes use of the numpy and scipy packages.
+The toolbox makes use of the Numpy and Scipy packages.
 
 ## Installation
 
@@ -150,11 +154,11 @@ For the coherence, see:
 This code is made available under the Creative Commons Attribution - Non Commercial 4.0 License. For full details see LICENSE.md.
 
 Cite this toolbox as: 
-> Igor Brandão, "Quantum Gaussian Information Numerical Toolbox", https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python. Retrieved <*date-you-downloaded*>
+> Igor Brandão, "Quantum Gaussian Information Toolbox", https://github.com/IgorBrandao42/Quantum-Gaussian-Information-Toolbox. Retrieved <*date-you-downloaded*>
 
 
 ## Acknowledgment
-The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for the discussions. The author is thankful for support received from FAPERJ Scholarship No. E-26/200.270/2020 and CNPq Scholarship No. 140279/2021-0.
+The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for helpful discussions, and Professor Dan Marchesin for all the coding lessons. The author is thankful for support received from FAPERJ Scholarships No. E-26/200.270/2020 and CNPq Scholarship No. 140279/2021-0.
 
 
 
