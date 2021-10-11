@@ -65,33 +65,15 @@ bipartite_state.beam_splitter(1.5)    # Apply beam splitter operator
 bipartite_state.two_mode_squeezing(2) # Apply two-mode squeezing operator
 ```
 
-Information about a generic multimode gaussian state can be recovered through the other 'gaussian_state' class' methods:
-
-| Method | Calculates|
-|--|--|
-| purity | Purity |
-| symplectic_eigenvalues | Symplectic eigenvalues of the covariance matrix |
-| von_Neumann_Entropy | von Neumann entropy |
-| mutual_information | Mutual Information for multimode state |
-| occupation_number | Array with ccupation number for each mode of the gaussian state |
-| wigner | Wigner function over a 2D grid for a single mode gaussian state |
-|squeezing_degree | Ratio of the variance of the squeezed and antisqueezed quadratures|
-|fidelity | Quantum Fidelity between the two gaussian states|
-| logarithmic_negativity | Logarithmic negativity for a bipartition of a gaussian state|
-
-Please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these methods
+Information about a generic multimode gaussian state can be recovered through the other 'gaussian_state' class' methods, 
+please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these methods
 
 ## gaussian_dynamics class
-The toolbox is also equipped with a second class 'gaussian_dynamics' to simulate the time evolution of a given initial state (gaussian_state) following a gaussian preserving dynamics dictated by an arbitrary set of quantum Langevin and Lyapunov equations
+The toolbox is also equipped with a second class 'gaussian_dynamics' to simulate unconditional and conditional time evolution of a given initial state (gaussian_state) following a gaussian preserving dynamics dictated by an arbitrary set of quantum Langevin and Lyapunov equations and general-dyne measurements.
 
-The input arguments to this class constructor are:
+Once again, please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these methods
 
- - A --- Drift matrix for the Langevin equation (numpy array or function)
- - D --- Diffusion matrix for the Lyapunov equation (numpy array)
- - N --- Vector with the mean value of the input noises (numpy array)
- - initial_state --- Initial state for the time evolution (gaussian_state class instace)
-
-The toolbox is able to account for time dependent drift matrices given by gufunc or lambda functions!
+Obs: The toolbox is able to account for time dependent drift matrices given by gufunc or lambda functions!
 
 See below a simple example:
 ```python
