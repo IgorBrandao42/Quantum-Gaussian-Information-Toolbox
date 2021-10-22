@@ -1608,7 +1608,7 @@ class gaussian_dynamics:
         result = self.semi_classical_trajectories
         return result
         
-    def langevin_conditional(self, t_span, N_ensemble=200, rho_bath=gaussian_state(), C=0, Gamma=0, V_m=0):
+    def langevin_conditional(self, t_span, V_evolved, N_ensemble=200, rho_bath=gaussian_state(), C=0, Gamma=0, V_m=0):
         """Solve the conditional stochastic Langevin equation for the expectation value of the quadrature operators
         using a Monte Carlos simulation to numericaly integrate the stochastic Langevin equations
         
@@ -1648,23 +1648,23 @@ class gaussian_dynamics:
         C_T = np.transpose(C)
         Gamma_T = np.transpose(Gamma)
         
-        R_bath = np.reshape(rho_bath.R, (2,))                                   # Mean quadratures for the bath state
+        R_bath = np.reshape(rho_bath.R, (len(rho_bath.R),))                                   # Mean quadratures for the bath state
         V_bath = rho_bath.V
         
-        N = np.reshape(self.N, (2,))
+        N = np.reshape(self.N, (len(self.N),))
         
         self.quantum_trajectories = N_ensemble*[None]                           # Preallocate memory to store the trajectories
         
         for i in range(N_ensemble):                                             # Loop on the random initial positions (# Monte Carlos simulation using Euler-Maruyama method in each iteration)
             
             X = np.zeros((self.Size_matrices, self.N_time));                    # Current quatum trajectory to be calculated, this matrix stores each quadrature at each time (first and second dimensions, respectively)
-            X[:,0] = np.reshape(self.initial_state.R, (2,))                     # Initial mean quadratures are exactly the same as the initial state (stochasticity only appear on the measurement outcomes)
+            X[:,0] = np.reshape(self.initial_state.R, (2*self.initial_state.N_modes,))                     # Initial mean quadratures are exactly the same as the initial state (stochasticity only appear on the measurement outcomes)
             
             cov = (V_bath + V_m)/2.0                                            # Covariance for the distribution of the measurement outcome (R_m)
             R_m = np.random.multivariate_normal(R_bath, cov, (self.N_time))     # Sort the measurement results
             
             for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration of the conditional Langevin equation
-                V = self.V_conditional[k]                                       # Get current covariance matrix (pre-calculated according to deterministic conditional Lyapunov equation)
+                V = V_evolved[k]                                       # Get current covariance matrix (pre-calculated according to deterministic conditional Lyapunov equation)
                 dw = np.matmul(fractional_matrix_power(V_bath+V_m, -0.5), R_m[k,:] - R_bath) # Calculate the Wiener increment
                 
                 X[:,k+1] = X[:,k] + (np.matmul(AA(self.t[k]), X[:,k]) + N)*dt + sq_dt_2*np.matmul(np.matmul(V, C_T) + Gamma_T, dw) # Calculate the quantum trajectories following the stochastis conditional Langevin equation
@@ -1710,7 +1710,10 @@ class gaussian_dynamics:
         
         assert rho_bath.N_modes == N_measured, "The number of bath modes does not match the number of measured modes"
         
-        Omega = self.initial_state.Omega                                        # Rename symplectic form matrix
+        assert N_measured <= self.initial_state.N_modes, "There are more measured modes, than there are on the initial state"
+        
+        Omega_m = rho_bath.Omega
+        Omega_n = self.initial_state.Omega                                        # Rename bath's symplectic form matrix
         
         V_bath = rho_bath.V                                                     # Covariance matrix for the bath's state
         
@@ -1731,9 +1734,9 @@ class gaussian_dynamics:
         temp = fractional_matrix_power(V_bath + V_m, -0.5);                     # Auxiliar variable
         C_int_T = np.transpose(C_int);                                          # Transpose of interaction matrix (auxiliar variable)
         
-        C = np.matmul(np.matmul(temp, Omega), C_int_T);                         # Extra matrix on the Lyapunov equation
+        C = np.matmul(np.matmul(temp, Omega_m), C_int_T);                         # Extra matrix on the Lyapunov equation
         
-        Gamma = -np.matmul(np.matmul(np.matmul(temp, V_bath), C_int_T), Omega); # Extra matrix on the Lyapunov equation
+        Gamma = -np.matmul(np.matmul(np.matmul(temp, V_bath), C_int_T), Omega_n); # Extra matrix on the Lyapunov equation
         
         is_conditional = True                                                   # Boolean telling auxiliar variable that the conditional dynamics is to be calculated
         
@@ -1741,7 +1744,7 @@ class gaussian_dynamics:
         
         assert status_lyapunov != -1, "Unable to perform the time evolution of the covariance matrix through Lyapunov equation - Integration step failed"
         
-        R_evolved = self.langevin_conditional(t_span, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
+        R_evolved = self.langevin_conditional(t_span, V_evolved, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
         
         self.states_conditional = []                                            # Combine the time evolutions calculated above into an array of gaussian states
         for i in range(self.N_time):
@@ -1752,6 +1755,36 @@ class gaussian_dynamics:
 
 
 ################################################################################
+
+# Create elementary gaussian states
+def vacuum():
+    """Returns a vacuum state"""
+    return gaussian_state()
+
+def coherent(alpha=1):
+    """Returns a coherent state with complex amplitude alpha"""
+    R = np.array([[2*alpha.real], [2*alpha.imag]]);                             # Mean quadratures  of a coherent state with complex amplitude alpha
+    V = np.identity(2);                                                         # Covariance matrix of a coherent state with complex amplitude alpha
+    
+    return gaussian_state(R, V)
+
+def squeezed(r=1):
+    """Returns a squeezed state with real squeezing parameter r"""
+    assert np.isreal(r), "Unsupported imaginary amplitude for squeezed state"
+    
+    R = np.array([[0], [0]])                                                    # Mean quadratures  of a coherent state with complex amplitude alpha
+    V = np.diag([np.exp(-2*r), np.exp(+2*r)]);                                  # Covariance matrix of a coherent state with complex amplitude alpha
+    
+    return gaussian_state(R, V)
+
+def thermal(nbar=1):
+    """Returns a thermal state with mean occupation number nbar"""
+    assert nbar>=0, "Imaginary or negative occupation number for thermal state"
+    
+    R = np.array([[0], [0]])                                                    # Mean quadratures  of a coherent state with complex amplitude alpha
+    V = np.diag([2.0*nbar+1, 2.0*nbar+1]);                                      # Covariance matrix of a coherent state with complex amplitude alpha  
+    
+    return gaussian_state(R, V)
 
 
 # Construct another state, from a base gaussian_state
