@@ -81,7 +81,7 @@ D = np.diag([0, 2*gamma*(2*nbar_env+1)])       # Diffusion matrix
 N = np.zeros((2,1))                            # Driving vector
 
 alpha = 1 + 2j                                 # Coherent state amplitude
-initial_state = qgt.coherent( alpha) 		   # Initial state
+initial_state = qgt.coherent(alpha) 		         # Initial state
 
 t = np.linspace(0, 2*np.pi/omega, 1000);       # Timestamps for simulation
 
@@ -113,6 +113,7 @@ In the file **Example_gaussian_dynamics.py** there is a basic example of the cap
 
 ## Author
  Igor Brandão, M. Sc. in Physics from Pontifical Catholic University of Rio de Janeiro, Brazil.
+ 
  [Contact me](mailto:igorbrandao@aluno.puc-rio.br) --- [ Google Scholar](https://scholar.google.com.br/citations?user=WuywvSEAAAAJ) --- [Research Gate](https://www.researchgate.net/profile/Igor-Brandao-2)
 
 ## Mathematical Formalism
