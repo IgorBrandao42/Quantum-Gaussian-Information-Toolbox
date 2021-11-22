@@ -1,130 +1,107 @@
 
-# Gaussian Quantum Information Numerical Toolbox (Python)
+# QuGIT: Quantum Gaussian Information Toolbox
 
-This is an object-oriented Python library aimed at simulating any multimode quantum gaussian states, findiing their time evolution according to sets of quantum Langevin and Lyapunov equations and recovering the information about these states.
+QuGIT is an open-sourced object-oriented Python library aimed at simulating multimode quantum gaussian states, finding their unconditional or conditional time evolution according to sets of quantum Langevin and Lyapunov equations and recovering information about these states.
+
+Gaussian states are a particular class of continuous variable states that can be completelly described by their quadratures' first and second moments [[Rev. Mod. Phys. 84, 621]](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621).  
+
+The toolbox takes advantage of the structure of gaussian quantum states to efficiently simulate them without the need to work with truncated Hilbert spaces.
 
 ## gaussian_state class
-Gaussian states are a particular class of continuous variable states that can be completelly described by their quadratures' first and second moments [[Rev. Mod. Phys. 84, 621]](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621).  The toolbox is able to simulate any gaussian state through the class 'gaussian_state' whose input can be
 
- - R, V --- mean quadrature vector and covariance matrix for the desired gaussian states;
-- Name-pair value for an elementary single-mode gaussian state:
-	 - "vaccum" --- generates a vaccum state
-	 - "coherent", 1+2j --- generates a coherent state with complex amplitude 1+2j
-	 - "squeezed", 2 --- generates a squeezed state with real squeezing parameter 2
-	 - "thermal", 0.1 --- generates a thermal state with occupation number 0.1
+The fundamental building block of the toolbox is its ability to emulate an arbitrary multimode gaussian state, perform gaussian operations, and retrieve information from it. This is achieved through the custom Python class `gaussian_state`, whose constructor arguments are
+ - R, V --- numpy.ndarray mean quadrature vector and covariance matrix for the desired gaussian states;
+
+Elementary gaussian states can be created using the library functions: `vaccum()`, `coherent()`, `squeezed()` and `thermal()`.
 
 ```python
 import numpy as np
-from quantum_gaussian_toolbox import *
+import quantum_gaussian_toolbox as qgt
 
-vacuum   = gaussian_state("vacuum");           	     # Vacuum   state
-coherent = gaussian_state("coherent", 1 + 2j);       # Coherent state
-squeezed = gaussian_state("squeezed", 2);      	     # Squeezed state
-thermal  = gaussian_state("thermal", 0.1);           # Thermal  state
+vac = qgt.vacuum()           				# Vacuum   state
+coh = qgt.coherent(1-20j)       			# Coherent state
+sq  = qgt.squeezed(1.2)      				# Squeezed state
+th  = qgt.thermal(4)             			# Thermal  state
 
-R = np.array([1, 2, 3, 4])                           # Mean quadrature vector
-V = np.array([[1, 0, 0, 0],                          # Covariance matrix
-              [0, 1, 0, 0],
-              [0, 0, 1, 0],
-              [0, 0, 0, 1]])
-              
-bipartite_state = gaussian_state(R, V);		     # Generic multimode gaussian state
+R = np.array([1, 2, 3, 4])                  # Mean quadrature vector
+V = np.eye(4)                 				# Covariance matrix
+state0 = qgt.gaussian_state(R, V)			# Multimode gaussian state
 ```
 
-More so, it is possible to combine any number of gaussian states into their direct product and retrieve only partitions of the composite gaussian state:
-```python
-tripartite_state = thermal.tensor_product([vaccum, generic_state]); # Create tripartite gaussian state
-
-bipartition = tripartite_state.partial_trace([2]);    # Perform partial trace over the third mode
-
-last_two_modes = tripartite_state.only_modes([1, 2]); # Get the last two modes by performing partial trace over the first mode 
-```
-
-It is possible to apply a number of gaussian unitaries to a given single-mode or bipartite state, namelly:
- 1. Single-mode operators:
-	 - Displacement operator
-	 - Squeezing operator
-	 - Rotation operator
- 2. Two-mode operators:
-	 - Beam-splitter operator
-	 - Two-mode squeezing operator
+It is possible to apply a number of gaussian operations and retrieve information about the resulting state:
 
 ```python
-squeezed.displace(3 + 4j); 	          # Apply displacement operator
+### Tensor product and partial trace
+state0.tensor_product([vaccum, th])      		# Update state0 to be the tensor product of itself and the state on the argument
 
-thermal.squeeze(2);        	          # Apply squeezing operator
+tripartite = qgt.partial_trace(state0,[2])  	# Tripartite is a copy of state0 after partial trace was performed on its 3rd mode. state0 is unchanged
 
-vacuum.rotate(np.pi/2);		          # Apply rotation operator
+bipartite = tripartite_state.only_modes([1, 2]) # Get the last two modes by performing partial trace over the first and second modes
 
-bipartite_state.beam_splitter(1.5)    # Apply beam splitter operator
 
-bipartite_state.two_mode_squeezing(2) # Apply two-mode squeezing operator
+### Gaussian unitaries
+sq.displace(3 + 4j); 	          # Apply displacement operator
+
+th.squeeze(2);        	          # Apply squeezing operator
+
+bipartite.two_mode_squeezing(2)   # Apply two-mode squeezing operator
+
+
+### General-dyne measurements
+bipartite.measurement_heterodyne(coh) # Updates the global state 
+# after the last mode was measured into a coherent state
+
+
+### Retrieve information
+p = th.purity()					  # Calculates the purity of a state
+
+sq_degree = squeezing_degree(sq)  # Calculates the amount of squeezing
 ```
 
-Information about a generic multimode gaussian state can be recovered through the other 'gaussian_state' class' methods:
-
-| Method | Calculates|
-|--|--|
-| purity | Purity |
-| symplectic_eigenvalues | Symplectic eigenvalues of the covariance matrix |
-| von_Neumann_Entropy | von Neumann entropy |
-| mutual_information | Mutual Information for multimode state |
-| occupation_number | Array with ccupation number for each mode of the gaussian state |
-| wigner | Wigner function over a 2D grid for a single mode gaussian state |
-|squeezing_degree | Ratio of the variance of the squeezed and antisqueezed quadratures|
-|fidelity | Quantum Fidelity between the two gaussian states|
-| logarithmic_negativity | Logarithmic negativity for a bipartition of a gaussian state|
-
-Please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these methods
+Please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these and other methods!
 
 ## gaussian_dynamics class
-The toolbox is also equipped with a second class 'gaussian_dynamics' to simulate the time evolution of a given initial state (gaussian_state) following a gaussian preserving dynamics dictated by an arbitrary set of quantum Langevin and Lyapunov equations
+The toolbox is also equipped with a second class 'gaussian_dynamics' to simulate unconditional and conditional time evolution of a given initial state (`gaussian_state`) following a gaussian preserving dynamics dictated by an arbitrary set of quantum Langevin and Lyapunov equations and general-dyne measurements.
 
-The input arguments to this class constructor are:
-
- - A --- Drift matrix for the Langevin equation (numpy array or function)
- - D --- Diffusion matrix for the Lyapunov equation (numpy array)
- - N --- Vector with the mean value of the input noises (numpy array)
- - initial_state --- Initial state for the time evolution (gaussian_state class instace)
-
-The toolbox is able to account for time dependent drift matrices given by gufunc or lambda functions!
-
-See below a simple example:
+Example of usage:
 ```python
 import numpy as np
-from quantum_gaussian_toolbox import  *
+import quantum_gaussian_toolbox as qgt
 
 omega = 2*np.pi*197e+3                         # Particle natural frequency [Hz]
 gamma = 2*np.pi*881.9730                       # Damping constant [Hz] at 1.4 mbar pressure
 nbar_env = 3.1731e+07                          # Environmental    occupation number
 
-A = np.block([[    0   ,  +omega ]             # Drift matrix for harmonic potential
+A = np.block([[    0   ,  +omega ],            # Drift matrix for harmonic potential
               [ -omega ,  -gamma ]]) 
         
 D = np.diag([0, 2*gamma*(2*nbar_env+1)])       # Diffusion matrix
-N = np.zeros((2,1))                            # Mean noise vector
+N = np.zeros((2,1))                            # Driving vector
 
 alpha = 1 + 2j                                 # Coherent state amplitude
-initial_state = gaussian_state("coherent",alpha) # Initial state
+initial_state = qgt.coherent(alpha) 		         # Initial state
 
-t = linspace(0, 2*np.pi/omega, 1000);          # Timestamps for simulation
-simulation = gaussian_dynamics(A, D, N, initial_state); # Create simulation instance!
-states = simulation.run(t);                    # Simulate and retrieve time evolved states (array of gaussian_state instances)   
+t = np.linspace(0, 2*np.pi/omega, 1000);       # Timestamps for simulation
+
+simulation = qgt.gaussian_dynamics(A, D, N, initial_state) # Simulation instance
+
+states = simulation.unconditional_dynamics(t)  # Simulate
+# Retrieve a list of time evolved gaussian_state class instances
 ```
 
-The method 'run' returns the time evolved state (array of gaussian_state instances) at the specified times (input argument)
+We note that  the toolbox is able to account for time dependent drift matrices given by gufunc or lambda functions. Please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these methods
 
 
 ## Dependencies
 
-This toolbox makes use of the numpy and scipy packages.
+The toolbox makes use of the Numpy and Scipy packages.
 
 ## Installation
 
 Clone this repository or download **quantum_gaussian_toolbox.py** file to your project folder and import the toolbox:
 
 ```python
-from quantum_gaussian_toolbox import *
+import quantum_gaussian_toolbox as qgt
 ```
 
 # Running Example
@@ -133,7 +110,9 @@ In the file **Example_gaussian_state.py** there is a basic example of the capabi
 In the file **Example_gaussian_dynamics.py** there is a basic example of the capabilities of this Toolbox to simulate the time evolution of multimode gaussian state following closed/open quantum dynamics through a set of quantum Langevin and Lyapunov equations.
 
 ## Author
-[Igor Brandão](mailto:igorbrandao@aluno.puc-rio.br) - M.Sc. in Physics from Pontifical Catholic University of Rio de Janeiro, Brazil. Advisor: [Thiago Guerreiro](mailto:barbosa@puc-rio.br)
+ Igor Brandão, M. Sc. in Physics from Pontifical Catholic University of Rio de Janeiro, Brazil.
+ 
+ [Contact me](mailto:igorbrandao@aluno.puc-rio.br) --- [ Google Scholar](https://scholar.google.com.br/citations?user=WuywvSEAAAAJ) --- [Research Gate](https://www.researchgate.net/profile/Igor-Brandao-2)
 
 ## Mathematical Formalism
 For the study of Gaussian Quantum Information, this code was based on and uses the same formalism as:
@@ -150,11 +129,11 @@ For the coherence, see:
 This code is made available under the Creative Commons Attribution - Non Commercial 4.0 License. For full details see LICENSE.md.
 
 Cite this toolbox as: 
-> Igor Brandão, "Quantum Gaussian Information Numerical Toolbox", https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python. Retrieved <*date-you-downloaded*>
+> Igor Brandão, "Quantum Gaussian Information Toolbox", https://github.com/IgorBrandao42/Quantum-Gaussian-Information-Toolbox. Retrieved <*date-you-downloaded*>
 
 
 ## Acknowledgment
-The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for the discussions. The author is thankful for support received from FAPERJ Scholarship No. E-26/200.270/2020 and CNPq Scholarship No. 140279/2021-0.
+The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for helpful discussions, and Professor Dan Marchesin for all the coding lessons. The author is thankful for support received from FAPERJ Scholarships No. E-26/200.270/2020 and CNPq Scholarship No. 140279/2021-0.
 
 
 
