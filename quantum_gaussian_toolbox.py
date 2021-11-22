@@ -9,17 +9,21 @@ Contact: igorbrandao@aluno.puc-rio.br
 
 
 import numpy as np
+from numpy.linalg import det
+from numpy.linalg import matrix_power
+
 from scipy.integrate import solve_ivp
 from scipy.linalg import solve_continuous_lyapunov
 from scipy.linalg import block_diag
 from scipy.linalg import sqrtm
-from numpy.linalg import det
-from numpy.linalg import matrix_power
-#import types
+from scipy.linalg import fractional_matrix_power
+
+
+################################################################################
+
 
 class gaussian_state:                                                           # Class definning a multimode gaussian state
-    """
-    Class simulation of a multimode gaussian state
+    """Class simulation of a multimode gaussian state
     
     ATTRIBUTES:
         self.R       - Mean quadratures vector
@@ -31,24 +35,17 @@ class gaussian_state:                                                           
     # Constructor and its auxiliar functions    
     def __init__(self, *args):
         """
-        Constructor for a class instance simulating a gaussian state 
-        with mean quadratures and covariance matrix
-        
         The user can explicitly pass the first two moments of a multimode gaussian state
         or pass a name-value pair argument to choose a single mode gaussian state
         
         PARAMETERS:
-            R0 - mean quadratures for gaussian state
-            V0 - covariance matrix for gaussian state
+            R0, V0 - mean quadratures vector and covariance matrix of a gaussian state (ndarrays)
             
-        Alternatively, the user may pass a name-value pair argument 
-        to create an elementary single mode gaussian state, see below.
-        
         NAME-VALUE PAIR ARGUMENTS:
-          "vacuum"                        - generates vacuum   state
-          "thermal" , occupation number   - generates thermal  state
-          "coherent", complex amplitude   - generates coherent state
-          "squeezed", squeezing parameter - generates squeezed state
+            "vacuum"                        - generates vacuum   state (string)
+            "thermal" , occupation number   - generates thermal  state (string, float)
+            "coherent", complex amplitude   - generates coherent state (string, complex)
+            "squeezed", squeezing parameter - generates squeezed state (string, float)
         """
 
         if(len(args) == 0):                                                     # Default constructor (vacuum state)
@@ -82,70 +79,6 @@ class gaussian_state:                                                           
         
         omega = np.array([[0, 1], [-1, 0]]);                                    # Auxiliar variable
         self.Omega = np.kron(np.eye(self.N_modes,dtype=int), omega)             # Save the symplectic form matrix in a class attribute                                                    
-    
-    def check_uncertainty_relation(self):
-      """
-      Check if the generated covariance matrix indeed satisfies the uncertainty principle (debbugging)
-      """
-      
-      V_check = self.V + 1j*self.Omega;
-      eigvalue, eigvector = np.linalg.eig(V_check)
-      
-      assert all(eigvalue>=0), "CM does not satisfy uncertainty relation!"
-      
-      return V_check
-    
-    def loss_ancilla(self,idx,tau):
-        """
-        Simulates a generic loss on mode idx by anexing an ancilla vacuum state and applying a
-        beam splitter operator with transmissivity tau. The ancilla is traced-off from the final state. 
-        
-        PARAMETERS:
-           idx - index of the mode that will suffer loss
-           tau - transmissivity of the beam splitter
-        
-        CALCULATES:
-            damped_state - final damped state
-        """
-
-        damped_state = self.tensor_product([gaussian_state("vacuum")])
-        damped_state.beam_splitter(tau,[idx, damped_state.N_modes-1])
-        damped_state = damped_state.partial_trace([damped_state.N_modes-1])
-        
-        return damped_state
-    
-    def number_operator_moments(self):
-        """
-        Calculates means vector and covariance matrix of photon numbers for each mode of the gaussian state
-        
-        CALCULATES:
-            m - mean values of number operator in arranged in a vector (Nx1 numpy.ndarray)
-            K - covariance matrix of the number operator               (NxN numpy.ndarray)
-           
-        REFERENCE:
-            Phys. Rev. A 99, 023817 (2019)
-            Many thanks to Daniel Tandeitnik for the base code for this method!
-        """
-        q = self.R[::2]                                                         # Mean values of position quadratures (even entries of self.R)
-        p = self.R[1::2]                                                        # Mean values of momentum quadratures (odd  entries of self.R)
-        
-        alpha   = 0.5*(q + 1j*p)                                                # Mean values of annihilation operators
-        alpha_c = 0.5*(q - 1j*p)                                                # Mean values of creation     operators
-        
-        V_1 = self.V[0::2, 0::2]/2.0                                            # Auxiliar matrix
-        V_2 = self.V[0::2, 1::2]/2.0                                            # Auxiliar matrix
-        V_3 = self.V[1::2, 1::2]/2.0                                            # Auxiliar matrix
-        
-        A = ( V_1 + V_3 + 1j*(np.transpose(V_2) - V_2) )/2.0                    # Auxiliar matrix
-        B = ( V_1 - V_3 + 1j*(np.transpose(V_2) + V_2)   )/2.0                    # Auxiliar matrix
-        
-        temp = np.multiply(np.matmul(alpha_c, alpha.transpose()), A) + np.multiply(np.matmul(alpha_c, alpha_c.transpose()), B) # Yup, you guessed it, another auxiliar matrix
-        
-        m = np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5 # Mean values of number operator (occupation numbers)
-        
-        K = np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real # Covariance matrix for the number operator
-        
-        return m, K
     
     def decide_which_state(self, varargin):
         # If the user provided a name-pair argument to the constructor,
@@ -185,6 +118,18 @@ class gaussian_state:                                                           
             self.N_modes = [];
             raise ValueError("Unrecognized gaussian state name, please check for typos or explicitely pass its first moments as arguments")
     
+    def check_uncertainty_relation(self):
+      """
+      Check if the generated covariance matrix indeed satisfies the uncertainty principle (debbugging)
+      """
+      
+      V_check = self.V + 1j*self.Omega;
+      eigvalue, eigvector = np.linalg.eig(V_check)
+      
+      assert all(eigvalue>=0), "CM does not satisfy uncertainty relation!"
+      
+      return V_check
+    
     def __str__(self):
         return str(self.N_modes) + "-mode gaussian state with mean quadrature vector R =\n" + str(self.R) + "\nand covariance matrix V =\n" + str(self.V)
     
@@ -211,10 +156,13 @@ class gaussian_state:                                                           
         for rho in rho_list:                                                    # Loop through each state that is to appended
             R_final = np.vstack((R_final, rho.R))                               # Create its first moments
             V_final = block_diag(V_final, rho.V);
-      
-        rho = gaussian_state(R_final, V_final);                                 # Generate the gaussian state with these moments
-      
-        return rho
+        
+        temp = gaussian_state(R_final, V_final);                                 # Generate the gaussian state with these moments
+        
+        self.R = temp.R                                                         # Copy its attributes into the original instance
+        self.V = temp.V
+        self.Omega   = temp.Omega
+        self.N_modes = temp.N_modes
     
     def partial_trace(self, indexes):
         """
@@ -228,7 +176,7 @@ class gaussian_state:                                                           
         """
       
         N_A = int(len(self.R) - 2*len(indexes));                                    # Twice the number of modes in resulting state
-        assert N_A>=0, "Partial trace over more states than exists in gaussian state" 
+        assert N_A>=0, "Partial trace over more states than there exist in gaussian state" 
       
         # Shouldn't there be an assert over max(indexes) < obj.N_modes ? -> you cant trace out modes that do not exist
       
@@ -247,9 +195,13 @@ class gaussian_state:                                                           
             for j in range(len(modes)):
                 n = modes[j]
                 V0[(2*i):(2*i+2), (2*j):(2*j+2)] = self.V[(2*m):(2*m+2), (2*n):(2*n+2)]
-      
-        rho_A = gaussian_state(R0, V0)
-        return rho_A
+        
+        temp = gaussian_state(R0, V0);                                          # Generate the gaussian state with these moments
+        
+        self.R = temp.R                                                         # Copy its attributes into the original instance
+        self.V = temp.V
+        self.Omega   = temp.Omega
+        self.N_modes = temp.N_modes
     
     def only_modes(self, indexes):
       """
@@ -276,9 +228,34 @@ class gaussian_state:                                                           
                 n = indexes[j]
                 V0[(2*i):(2*i+2), (2*j):(2*j+2)] = self.V[(2*m):(2*m+2), (2*n):(2*n+2)]
       
-      rho_A = gaussian_state(R0, V0);
-      return rho_A
+      temp = gaussian_state(R0, V0);                                            # Generate the gaussian state with these moments
+        
+      self.R = temp.R                                                           # Copy its attributes into the original instance
+      self.V = temp.V
+      self.Omega   = temp.Omega
+      self.N_modes = temp.N_modes  
     
+    def loss_ancilla(self,idx,tau):
+        """
+        Simulates a generic loss on mode idx by anexing an ancilla vacuum state and applying a
+        beam splitter operator with transmissivity tau. The ancilla is traced-off from the final state. 
+        
+        PARAMETERS:
+           idx - index of the mode that will suffer loss
+           tau - transmissivity of the beam splitter
+        
+        CALCULATES:
+            damped_state - final damped state
+        """
+
+        damped_state = tensor_product([self, gaussian_state("vacuum")])
+        damped_state.beam_splitter(tau,[idx, damped_state.N_modes-1])
+        damped_state.partial_trace([damped_state.N_modes-1])
+        
+        self.R = damped_state.R                                                 # Copy the damped state's attributes into the original instance
+        self.V = damped_state.V
+        self.Omega   = damped_state.Omega
+        self.N_modes = damped_state.N_modes
     
     # Properties of the gaussian state
     def symplectic_eigenvalues(self):
@@ -349,7 +326,8 @@ class gaussian_state:                                                           
         nu = self.symplectic_eigenvalues();                                     # Calculates the sympletic eigenvalues of a covariance matrix V
         
                                                                                 # 0*log(0) is NaN, but in the limit that x->0 : x*log(x) -> 0
-        nu[np.abs(nu - 1) < 1e-15] = nu[np.abs(nu - 1) < 1e-15] + 1e-15;                                 # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
+        # nu[np.abs(nu - 1) < 1e-15] = nu[np.abs(nu - 1) < 1e-15] + 1e-15;                                 # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
+        nu[np.abs(nu-1) < 1e-15] = 1+1e-15
         
         nu_plus  = (nu + 1)/2.0;                                                # Temporary variables
         nu_minus = (nu - 1)/2.0;
@@ -368,14 +346,14 @@ class gaussian_state:                                                           
             S     - von Neumann entropy for the i-th mode    of the j-th covariance matrix
         """
         S = np.zeros((self.N_modes, 1));                                        # Variable to store the entropy of each mode
-      
+        
         for j in range(self.N_modes):                                           # Loop through each mode
-            single_mode = self.only_modes([j]);                                   # Get the covariance matrix for only the i-th mode
+            single_mode = only_modes(self, [j]);                                # Get the covariance matrix for only the i-th mode
             S[j] = single_mode.von_Neumann_Entropy();                           # von Neumann Entropy for i-th mode of each covariance matrix
-      
-        S_tot = self.von_Neumann_Entropy();                                      # von Neumann Entropy for the total system of each covariance matrix
-      
-        I = np.sum(S) - S_tot;                                                     # Calculation of the mutual information
+        
+        S_tot = self.von_Neumann_Entropy();                                     # von Neumann Entropy for the total system of each covariance matrix
+        
+        I = np.sum(S) - S_tot;                                                  # Calculation of the mutual information
         return I
     
     def occupation_number(self):
@@ -397,6 +375,39 @@ class gaussian_state:                                                           
         
         nbar = 0.25*( Var_x + mean_x**2 + Var_p + mean_p**2 ) - 0.5;            # Calculate occupantion numbers at current time
         return nbar
+    
+    def number_operator_moments(self):
+        """
+        Calculates means vector and covariance matrix of photon numbers for each mode of the gaussian state
+        
+        CALCULATES:
+            m - mean values of number operator in arranged in a vector (Nx1 numpy.ndarray)
+            K - covariance matrix of the number operator               (NxN numpy.ndarray)
+           
+        REFERENCE:
+            Phys. Rev. A 99, 023817 (2019)
+            Many thanks to Daniel Tandeitnik for the base code for this method!
+        """
+        q = self.R[::2]                                                         # Mean values of position quadratures (even entries of self.R)
+        p = self.R[1::2]                                                        # Mean values of momentum quadratures (odd  entries of self.R)
+        
+        alpha   = 0.5*(q + 1j*p)                                                # Mean values of annihilation operators
+        alpha_c = 0.5*(q - 1j*p)                                                # Mean values of creation     operators
+        
+        V_1 = self.V[0::2, 0::2]/2.0                                            # Auxiliar matrix
+        V_2 = self.V[0::2, 1::2]/2.0                                            # Auxiliar matrix
+        V_3 = self.V[1::2, 1::2]/2.0                                            # Auxiliar matrix
+        
+        A = ( V_1 + V_3 + 1j*(np.transpose(V_2) - V_2) )/2.0                    # Auxiliar matrix
+        B = ( V_1 - V_3 + 1j*(np.transpose(V_2) + V_2)   )/2.0                    # Auxiliar matrix
+        
+        temp = np.multiply(np.matmul(alpha_c, alpha.transpose()), A) + np.multiply(np.matmul(alpha_c, alpha_c.transpose()), B) # Yup, you guessed it, another auxiliar matrix
+        
+        m = np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5 # Mean values of number operator (occupation numbers)
+        
+        K = np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real # Covariance matrix for the number operator
+        
+        return m, K
     
     def coherence(self):
         """
@@ -420,40 +431,6 @@ class gaussian_state:                                                           
         C = temp - S_total;                                                     # Calculation of the mutual information
         return C
     
-    def wigner(self, X, P):
-        """
-        Calculates the wigner function for a single mode gaussian state
-       
-        PARAMETERS
-            X, P - 2D grid where the wigner function is to be evaluated (use meshgrid)
-        
-        CALCULATES:
-            W - array with Wigner function over the input 2D grid
-        """
-        
-        assert self.N_modes == 1, "At the moment, this program only calculates the wigner function for a single mode state"
-        
-        N = self.N_modes;                                                       # Number of modes
-        W = np.zeros((len(X), len(P)));                                         # Variable to store the calculated wigner function
-        
-        one_over_purity = 1/self.purity();
-        
-        inv_V = np.linalg.inv(self.V)
-        
-        for i in range(len(X)):
-            x = np.block([ [X[i,:]] , [P[i,:]] ]);   
-            
-            for j in range(x.shape[1]):
-                dx = np.vstack(x[:, j]) - self.R;                                          # x_mean(:,i) is the i-th point in phase space
-                dx_T = np.hstack(dx)
-                
-                W_num = np.exp( - np.matmul(np.matmul(dx_T, inv_V), dx)/2 );    # Numerator
-                
-                W_den = (2*np.pi)**N * one_over_purity;                         # Denominator
-          
-                W[i, j] = W_num/W_den;                                          # Calculate the wigner function at every point on the grid
-        return W
-    
     def logarithmic_negativity(self, *args):
         """
         Calculation of the logarithmic negativity for a bipartite system
@@ -474,7 +451,7 @@ class gaussian_state:                                                           
             
             assert len(indexes) == 2, "Can only calculate the logarithmic negativity for a bipartition!"
                 
-            bipartition = self.only_modes(indexes)                              # Otherwise, get only the two mode specified by the user
+            bipartition = only_modes(self,indexes)                              # Otherwise, get only the two mode specified by the user
             V0 = bipartition.V                                                  # Take the full Covariance matrix of this subsystem
         else:
             raise TypeError('Unable to decide which bipartite entanglement to infer, please pass the indexes to the desired bipartition')
@@ -533,6 +510,8 @@ class gaussian_state:                                                           
         
         identity = np.identity(2*self.N_modes);
         
+        # V_temp = np.linalg.pinv(np.matmul(V_aux,OMEGA))                         # Trying to bypass singular matrix inversion ! I probably shouldnt do this...
+        # F_tot_4 = np.linalg.det( 2*np.matmul(sqrtm(identity + matrix_power(V_temp                ,+2)/4) + identity, V_aux) );
         F_tot_4 = np.linalg.det( 2*np.matmul(sqrtm(identity + matrix_power(np.matmul(V_aux,OMEGA),-2)/4) + identity, V_aux) );
         
         F_0 = (F_tot_4.real / np.linalg.det(V_1+V_2))**(1.0/4.0);               # We take only the real part of F_tot_4 as there can be a residual complex part from numerical calculations!
@@ -540,21 +519,19 @@ class gaussian_state:                                                           
         F = F_0*np.exp( -np.matmul(np.matmul(delta_u_T,inv_V), delta_u)  / 4);                        # Fidelity
         return F
     
-    
     # Gaussian unitaries (applicable to single mode states)
     def displace(self, alpha, modes=[0]):
         """
-        Apply displacement operator on a single mode gaussian state
-        TO DO: generalize these operation to many modes!
+        Apply displacement operator
        
         ARGUMENT:
            alpha - complex amplitudes for the displacement operator
            modes - indexes for the modes to be displaced 
         """
         
-        if not (isinstance(alpha, list) or isinstance(alpha, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(alpha, list) or isinstance(alpha, np.ndarray) or isinstance(alpha, range)):      # Make sure the input variables are of the correct type
             alpha = [alpha]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == len(alpha), "Unable to decide which modes to displace nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
@@ -575,9 +552,9 @@ class gaussian_state:                                                           
            modes - indexes for the modes to be squeezed
         """
         
-        if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
+        if not (isinstance(r, list) or isinstance(r, np.ndarray) or isinstance(r, range)):              # Make sure the input variables are of the correct type
             r = [r]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == len(r), "Unable to decide which modes to squeeze nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
@@ -601,9 +578,9 @@ class gaussian_state:                                                           
            modes - indexes for the modes to be squeezed
         """
         
-        if not (isinstance(theta, list) or isinstance(theta, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(theta, list) or isinstance(theta, np.ndarray) or isinstance(theta, range)):      # Make sure the input variables are of the correct type
             theta = [theta]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == len(theta), "Unable to decide which modes to rotate nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
@@ -630,15 +607,6 @@ class gaussian_state:                                                           
         """
         self.rotate(theta, modes)                                               # They are the same method/operator, this is essentially just a alias
     
-    # def apply_unitary(S, d):
-    #     """ Apply a generic gaussian unitary 
-    #     assert all(np.isreal(a)) , "Error when applying generic unitary, displacement d is not real!"
-
-    #     assert np.matmul( np.matmul(S, self.Omega), self.Omega.transpose()) , "Error when applying generic unitary, unitary S is not symplectic!"
-
-    #     self.R = np.matmul(S, self.R) + d
-    #     self.V = np.matmul(S, self.V), self.Omega.transpose())
-    
     # Gaussian unitaries (applicable to two mode states)
     def beam_splitter(self, tau, modes=[0, 1]):
         """
@@ -651,7 +619,7 @@ class gaussian_state:                                                           
         
         # if not (isinstance(tau, list) or isinstance(tau, np.ndarray)):          # Make sure the input variables are of the correct type
         #     tau = [tau]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == 2, "Unable to decide which modes to apply beam splitter operator nor by how much"
@@ -660,16 +628,30 @@ class gaussian_state:                                                           
         i = modes[0]
         j = modes[1] 
         
-        B = np.sqrt(tau)*np.identity(2)
-        S = np.sqrt(1-tau)*np.identity(2)
+        # B = np.sqrt(tau)*np.identity(2)
+        # S = np.sqrt(1-tau)*np.identity(2)
         
-        BS[2*i:2*i+2, 2*i:2*i+2] = B
-        BS[2*j:2*j+2, 2*j:2*j+2] = B
+        # BS[2*i:2*i+2, 2*i:2*i+2] = B
+        # BS[2*j:2*j+2, 2*j:2*j+2] = B
         
-        BS[2*i:2*i+2, 2*j:2*j+2] =  S
-        BS[2*j:2*j+2, 2*i:2*i+2] = -S
+        # BS[2*i:2*i+2, 2*j:2*j+2] =  S
+        # BS[2*j:2*j+2, 2*i:2*i+2] = -S
         
-        # BS = np.block([[B, S], [-S, B]]);
+        ##########################################
+        sin_theta = np.sqrt(tau)
+        cos_theta = np.sqrt(1-tau)
+        
+        BS[2*i  , 2*i  ] = sin_theta
+        BS[2*i+1, 2*i+1] = sin_theta
+        BS[2*j  , 2*j  ] = sin_theta
+        BS[2*j+1, 2*j+1] = sin_theta
+        
+        BS[2*i+1, 2*j  ] = +cos_theta
+        BS[2*j+1, 2*i  ] = +cos_theta
+        
+        BS[2*i  , 2*j+1] = -cos_theta
+        BS[2*j  , 2*i+1] = -cos_theta
+        ##########################################
         
         BS_T = np.transpose(BS)
         
@@ -687,7 +669,7 @@ class gaussian_state:                                                           
         
         # if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
         #     r = [r]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == 2, "Unable to decide which modes to apply two-mode squeezing operator nor by how much"
@@ -711,6 +693,23 @@ class gaussian_state:                                                           
         self.R = np.matmul(S2, self.R);
         self.V = np.matmul( np.matmul(S2, self.V), S2_T)
         
+    # Generic multimode gaussian unitary
+    def apply_unitary(self, S, d):
+        """
+        Apply a generic gaussian unitary on the gaussian state
+        
+        ARGUMENTS:
+            S,d - affine symplectic map (S, d) acting on the phase space, equivalent to gaussian unitary
+        """
+        assert all(np.isreal(d)) , "Error when applying generic unitary, displacement d is not real!"
+        
+        S_is_symplectic = np.allclose(np.matmul(np.matmul(S, self.Omega), S.transpose()), self.Omega)
+        
+        assert S_is_symplectic , "Error when applying generic unitary, unitary S is not symplectic!"
+        
+        self.R = np.matmul(S, self.R) + d
+        self.V = np.matmul(np.matmul(S, self.V), S.transpose())
+        
     # Gaussian measurements
     def measurement_general(self, *args):
         """
@@ -726,22 +725,25 @@ class gaussian_state:                                                           
            R_m      - first moments     of the conditional state after the measurement
            V_m      - covariance matrix of the conditional state after the measurement
            or
-           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+           rho_m    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
+           Conditional and unconditional Gaussian quantum dynamics - Contemp. Phys. 57, 331 (2016)
         """
         if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
-            R_m = args[0].R;
-            V_m = args[0].V;
+            R_m   = args[0].R;
+            V_m   = args[0].V;
+            rho_m = args[0]
         else:                                                                   # If the input arguments are the conditional state's mean quadrature vector anc covariance matrix
             R_m = args[0];
             V_m = args[1];
+            rho_m = gaussian_state(R_m, V_m)
         
-        idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);               # Indexes to the modes that are to be measured
+        idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);          # Indexes to the modes that are to be measured
         
-        rho_B = self.only_modes(idx_modes);                                     # Get the mode measured mode in the global state previous to the measurement
-        rho_A = self.partial_trace(idx_modes);                                  # Get the other modes in the global state        previous to the measurement
+        rho_B = only_modes(self, idx_modes);                                    # Get the mode measured mode in the global state previous to the measurement
+        rho_A = partial_trace(self, idx_modes);                                 # Get the other modes in the global state        previous to the measurement
         
         n = 2*rho_A.N_modes;                                                    # Twice the number of modes in state A
         m = 2*rho_B.N_modes;                                                    # Twice the number of modes in state B
@@ -755,37 +757,44 @@ class gaussian_state:                                                           
         
         rho_A.V = rho_A.V - np.matmul(V_AB, np.matmul(inv_aux, V_AB.transpose()) );
         
-        return rho_A
+        rho_A.tensor_product([rho_m])                                           # Generate the post measurement gaussian state
+        
+        self.R = rho_A.R                                                        # Copy its attributes into the original instance
+        self.V = rho_A.V
+        self.Omega   = rho_A.Omega
+        self.N_modes = rho_A.N_modes
     
     def measurement_homodyne(self, *args):
         """
         After a homodyne measurement is performed on the last m modes of a (n+m)-mode gaussian state
         this method calculates the conditional state the remaining n modes evolve into
         
-        The user must provide the gaussian_state of the measured m-mode state or its mean value
+        The user must provide the gaussian_state of the measured m-mode state or its mean quadrature vector
         
         At the moment, this method can only perform the measurement on the last modes of the global state,
         if you know how to perform this task on a generic mode, contact me so I can implement it! :)
        
         ARGUMENTS:
-           R_m      - first moments     of the conditional state after the measurement
-           V_m      - covariance matrix of the conditional state after the measurement
+           R_m      - first moments of the conditional state after the measurement (assumes measurement on position quadrature
            or
-           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+           rho_m    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
         """
       
         if isinstance(args[0], gaussian_state):                                 # If the input argument is a gaussian_state
-            R_m = args[0].R;
+            R_m   = args[0].R;
+            rho_m = args[0]
         else:                                                                   # If the input argument is the mean quadrature vector
             R_m = args[0];
+            V_m = args[1];
+            rho_m = gaussian_state(R_m, V_m)
         
         idx_modes = range(int(self.N_modes-len(R_m)/2), self.N_modes);          # Indexes to the modes that are to be measured
         
-        rho_B = self.only_modes(idx_modes);                                     # Get the mode measured mode in the global state previous to the measurement
-        rho_A = self.partial_trace(idx_modes);                                  # Get the other modes in the global state        previous to the measurement
+        rho_B = only_modes(self, idx_modes);                                    # Get the mode measured mode in the global state previous to the measurement
+        rho_A = partial_trace(self, idx_modes);                                 # Get the other modes in the global state        previous to the measurement
         
         n = 2*rho_A.N_modes;                                                    # Twice the number of modes in state A
         m = 2*rho_B.N_modes;                                                    # Twice the number of modes in state B
@@ -796,7 +805,13 @@ class gaussian_state:                                                           
         
         rho_A.R = rho_A.R - np.matmul(V_AB, np.matmul(MP_inverse, rho_B.R - R_m   ) ); # Update the other modes conditioned on the measurement results
         rho_A.V = rho_A.V - np.matmul(V_AB, np.matmul(MP_inverse, V_AB.transpose()) );
-        return rho_A
+        
+        rho_A.tensor_product([rho_m])                                           # Generate the post measurement gaussian state
+        
+        self.R = rho_A.R                                                        # Copy its attributes into the original instance
+        self.V = rho_A.V
+        self.Omega   = rho_A.Omega
+        self.N_modes = rho_A.N_modes
     
     def measurement_heterodyne(self, *args):
         """
@@ -811,22 +826,56 @@ class gaussian_state:                                                           
         ARGUMENTS:
            alpha    - complex amplitude of the coherent state after the measurement
            or
-           rho_B    - conditional gaussian state after the measurement on the last m modes (rho_B.N_modes = m)
+           rho_m    - conditional gaussian state after the measurement on the last m modes (rho_m.N_modes = m)
         
         REFERENCE:
            Jinglei Zhang's PhD Thesis - https://phys.au.dk/fileadmin/user_upload/Phd_thesis/thesis.pdf
         """
         
         if isinstance(args[0], gaussian_state):                                 # If the input argument is  a gaussian_state
-            rho_B = args[0];
+            rho_m = args[0];
         else:
-            rho_B = gaussian_state("coherent", args[0]);
+            rho_m = gaussian_state("coherent", args[0]);
         
-        rho_A = self.measurement_general(rho_B);
-        return rho_A
-     
+        self.measurement_general(rho_m);
+        
+    
+    # Phase space representation
+    def wigner(self, X, P):
+        """
+        Calculates the wigner function for a single mode gaussian state
+       
+        PARAMETERS
+            X, P - 2D grid where the wigner function is to be evaluated (use meshgrid)
+        
+        CALCULATES:
+            W - array with Wigner function over the input 2D grid
+        """
+        
+        assert self.N_modes == 1, "At the moment, this program only calculates the wigner function for a single mode state"
+        
+        N = self.N_modes;                                                       # Number of modes
+        W = np.zeros((len(X), len(P)));                                         # Variable to store the calculated wigner function
+        
+        one_over_purity = 1/self.purity();
+        
+        inv_V = np.linalg.inv(self.V)
+        
+        for i in range(len(X)):
+            x = np.block([ [X[i,:]] , [P[i,:]] ]);   
+            
+            for j in range(x.shape[1]):
+                dx = np.vstack(x[:, j]) - self.R;                                          # x_mean(:,i) is the i-th point in phase space
+                dx_T = np.hstack(dx)
+                
+                W_num = np.exp( - np.matmul(np.matmul(dx_T, inv_V), dx)/2 );    # Numerator
+                
+                W_den = (2*np.pi)**N * one_over_purity;                         # Denominator
+          
+                W[i, j] = W_num/W_den;                                          # Calculate the wigner function at every point on the grid
+        return W
+    
     def q_function(self, *args):
-        
         """
         Calculates the Hussimi Q-function over a meshgrid
         
@@ -865,14 +914,19 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+        
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2.0*M) , np.matmul( np.linalg.pinv(eye_2N+2.0*M) , np.conj(U) ) ) # Auxiliar variable
-        y = 2.0*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2.0*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2.0*M + eye_2N) , Q )  ) )        # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable
         
         # Loop through the meshgrid and evaluate Q-function
         q_func = np.zeros(ALPHA.shape)
@@ -890,8 +944,8 @@ class gaussian_state:                                                           
         
         return q_func
     
+    # Density matrix elements
     def density_matrix_coherent_basis(self, alpha, beta):
-        
         """
         Calculates the matrix elements of the density operator on the coherent state basis
         
@@ -920,15 +974,19 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+        
         Q = np.zeros(2*self.N_modes)                                            # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) )   # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
-        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                            # Auxiliar variable
-        
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )        # Auxiliar variable
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable
         
         gamma = np.zeros(2*self.N_modes,dtype=np.complex_)                      # Auxiliar 2*self.N_modes complex vector      
         gamma[:self.N_modes] = np.conj(beta)                                    # First N entries are the complex conjugate of beta
@@ -964,17 +1022,21 @@ class gaussian_state:                                                           
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+        
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
-        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable        
         
         H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
-        
         
         # Calculate the probabilities
         rho_m_n = np.zeros((2*self.N_modes)*[n_cutoff])                         # Initialize the tensor to 0 (n_cutoff entries in each of the 2*self.N_modes dimensions)
@@ -1021,28 +1083,43 @@ class gaussian_state:                                                           
         """
         
         # Preamble, get auxiliar variables that depend only on the gaussian state parameters
-        one_over_sqrt_2 = 1.0/np.sqrt(2)                                        # Auxiliar variable to save computation time
+        one_over_sqrt_2 = 1.0/np.sqrt(2.0)                                      # Auxiliar variable to save computation time
         
         eye_N  = np.eye(  self.N_modes)                                         # NxN   identity matrix (auxiliar variable to save computation time)
         eye_2N = np.eye(2*self.N_modes)                                         # 2Nx2N identity matrix (auxiliar variable to save computation time)
         
-        U = np.block([[-1j*one_over_sqrt_2*eye_N, +1j*one_over_sqrt_2*eye_N],
-                      [    one_over_sqrt_2*eye_N,     one_over_sqrt_2*eye_N]]); # Auxiliar unitary matrix
+        U = one_over_sqrt_2*np.block([[-1j*eye_N, +1j*eye_N],
+                                      [    eye_N,     eye_N]]);                 # Auxiliar unitary matrix
         
         M = np.block([[      self.V[1::2, 1::2]        , self.V[1::2, 0::2]],   # Covariance matrix in new notation
                       [np.transpose(self.V[1::2, 0::2]), self.V[0::2, 0::2]]])/2.0;
         
+        if np.allclose(2.0*M, eye_2N, rtol=1e-14, atol=1e-14):                      # If the cavirance matrix is the identity matrix, there will numeric errors below,
+            M = (1-1e-15)*M                                                     # We circumvent this by adding a noise on the last digit of a floating point number
+            
         Q = np.zeros([2*self.N_modes,1])                                        # Mean quadrature vector (rearranged)
         Q[:self.N_modes] = one_over_sqrt_2*self.R[1::2]                         # First self.N_modes entries are mean position quadratures
         Q[self.N_modes:] = one_over_sqrt_2*self.R[::2]                          # Last  self.N_modes entries are mean momentum quadratures
         
-        R = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
-        y = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
-        P_0 = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        Q_T = np.reshape(Q, [1, len(Q)])                                        # Auxiliar vector (transpose of vector Q)
+        aux_inv = np.linalg.pinv(eye_2N + 2.0*M)                                # Auxiliar matrix (save time only inverting a single time!)
         
+        R = np.matmul( np.matmul( U.conj().transpose() , eye_2N-2.0*M) , np.matmul( aux_inv , U.conj() ) ) # Auxiliar variable
+        y = 2.0*np.matmul( np.matmul( U.transpose() , np.linalg.pinv(eye_2N-2.0*M) ) , Q )                 # Auxiliar variable
+        P_0 = ( det(M + 0.5*eye_2N)**(-0.5) )*np.exp( -np.matmul( Q_T , np.matmul( aux_inv , Q )  ) )      # Auxiliar variable
+        
+        # DEBUGGING !
+        # R_old = np.matmul( np.matmul( np.conj(np.transpose(U)) , (1+1e-15)*eye_2N-2*M) , np.matmul( np.linalg.pinv(eye_2N+2*M) , np.conj(U) ) ) # Auxiliar variable
+        # y_old = 2*np.matmul( np.matmul( np.transpose(U) , np.linalg.pinv((1+1e-15)*eye_2N-2*M) ) , Q )                                          # Auxiliar variable
+        # P_0_old = ( (det(M + 0.5*eye_2N))**(-0.5) )*np.exp( -1*np.matmul( Q.transpose() , np.matmul( np.linalg.pinv(2*M + eye_2N) , Q )  ) )                # Auxiliar variable
+        # 
+        # assert np.allclose(R  ,   R_old, rtol=1e-10, atol=1e-10), "Achei!"
+        # assert np.allclose(y  ,   y_old, rtol=1e-10, atol=1e-10), "Achei!"
+        # assert np.allclose(P_0, P_0_old, rtol=1e-10, atol=1e-10), "Achei!"
+        # 
+        # print("Passou")
         
         H = Hermite_multidimensional(R, y, n_cutoff)                            # Calculate the Hermite polynomial associated with this gaussian state
-        
         
         # Calculate the probabilities
         P = np.zeros(self.N_modes*[n_cutoff])                                   # Initialize the tensor to 0 (n_cutoff entries in each of the self.N_modes dimensions)
@@ -1082,8 +1159,12 @@ class gaussian_state:                                                           
             for kk in range(self.N_modes):                     # kk = 1:dim/2
                 P.ravel()[int(nextCoord)] = P.ravel()[int(nextCoord)]/np.math.factorial(int(nextP[kk]-1));
         
-        return P 
-    
+        return P
+
+
+################################################################################
+
+
 def Hermite_multidimensional_original(R, y, n_cutoff=10):
     """
     Calculates the multidimensional Hermite polynomial H_m^R(y) from m = (0, ..., 0) up to (n_cutoff, ..., n_cutoff)
@@ -1154,8 +1235,6 @@ def Hermite_multidimensional_original(R, y, n_cutoff=10):
 
     H = H.real                                                                  # Get rid off any residual complex value
     
-    return H
-
 def Hermite_multidimensional(R, y, n_cutoff=10):
     """
     Calculates the multidimensional Hermite polynomial H_m^R(y) from m = (0, ..., 0) up to (n_cutoff, ..., n_cutoff)
@@ -1238,7 +1317,7 @@ def is_a_function(maybe_a_function):
     """
     return callable(maybe_a_function)                   # OLD: isinstance(obj, types.LambdaType) and obj.__name__ == "<lambda>"
 
-def lyapunov_ode(t, V_old_vector, A, D):
+def lyapunov_ode_unconditional(t, V_old_vector, A, D):
     """
     Auxiliar internal function defining the Lyapunov equation 
     and calculating the derivative of the covariance matrix
@@ -1255,53 +1334,74 @@ def lyapunov_ode(t, V_old_vector, A, D):
     dVdt_vector = np.reshape(dVdt, (M**2,));                                     # Matrix -> vector
     return dVdt_vector
 
+def lyapunov_ode_conditional(t, V_old_vector, A, D, C, Gamma):
+    """
+    Auxiliar internal function defining the Lyapunov equation 
+    and calculating the derivative of the covariance matrix
+    """
+    
+    M = A.shape[0];                                                             # System dimension (N_particles + 1 cavity field)partículas  + 1 campo)
+    
+    A_T = np.transpose(A)                                                       # Transpose of the drift matrix
+    
+    V_old = np.reshape(V_old_vector, (M, M));                                   # Vector -> matrix
+    
+    # chi = np.matmul(C, V_old) + Gamma             # THIS SHOULD BE FASTER!
+    # chi = np.matmul(np.transpose(chi), chi)
+    chi = np.matmul( np.matmul(V_old, np.transpose(C)) + np.transpose(Gamma),  np.matmul(C, V_old) + Gamma )    # Auxiliar matrix
+    
+    dVdt = np.matmul(A, V_old) + np.matmul(V_old, A_T) + D - chi;               # Calculate how much the CM derivative in this time step
+    
+    dVdt_vector = np.reshape(dVdt, (M**2,));                                    # Matrix -> vector
+    return dVdt_vector
+
+
+################################################################################
+
 
 class gaussian_dynamics:
-    """
-    Class simulating the time evolution of a gaussian state following a set of 
-    Langevin and Lyapunov equations for its first moments dynamics
+    """Class simulating unconditional and conditional dynamics of a gaussian state following a set of Langevin and Lyapunov equations
     
     ATTRIBUTES
-        A                     - Drift matrix (can be a lambda functions to have a time dependency!)
+        A                     - Drift matrix (can be a callable lambda functions to have a time dependency!)
         D                     - Diffusion Matrix 
         N                     - Mean values of the noises
         initial_state         - Initial state of the global system
         t                     - Array with timestamps for the time evolution
         
         is_stable             - Boolean telling if the system is stable or not
-        R_semi_classical      - Array with semi-classical mean quadratures (Semi-classical time evolution using Monte Carlos method)
-        R                     - Array with mean quadratures  for each time
-        V                     - Cell  with covariance matrix for each time
-        state                 - Gaussian state               for each time
-                                                                                    
         N_time                - Length of time array
         Size_matrices         - Size of covariance, diffusion and drift matrices
+        
+        states_unconditional  - List of time evolved states following unconditional dynamics
+        states_conditional    - List of time evolved states following   conditional dynamics (mean quadratures are the average of the trajectories from the quantum monte carlo method)
         steady_state_internal - Steady state
+        
+        quantum_trajectories        - Quantum trajectories from the Monte Carlo method for the conditional dynamics
+        semi_classical_trajectories - List of time evolved semi-classical mean quadratures (Semi-classical Monte Carlo method)
     """
     
     def __init__(self, A_0, D_0, N_0, initial_state_0):
-        """
-        Class constructor for simulating the time evolution of the global system
-        open/closed quantum dynamics dictated by Langevin and Lyapunov equations
+        """Class constructor for simulating the time evolution of the multimode systems following open unconditional and conditional quantum dynamics dictated by Langevin and Lyapunov equations
         
         Langevin: \dot{R} = A*X + N           : time evolution of the mean quadratures
        
         Lyapunov: \dot{V} = A*V + V*A^T + D   : time evolution of the covariance matrix
        
         PARAMETERS:
-           A_0           - Drift matrix     (numerical matrix or lambda functions for a matrix with time dependency
+           A_0           - Drift matrix     (numerical matrix or callable function for a time-dependent matrix)
            D_0           - Diffusion Matrix (auto correlation of the noises, assumed to be delta-correlated in time)
            N_0           - Mean values of the noises
            initial_state - Cavity linewidth
        
-        CALCULATES:
+        BUILDS:
            self           - instance of a time_evolution class
            self.is_stable - boolean telling if the system is stable or not
         """
       
-        self.A = A_0;  # .copy() ?                                                           # Drift matrix
-        self.D = D_0;  # .copy() ?                                                          # Diffusion Matrix
-        self.N = N_0.reshape((len(N_0),1));   # .copy() ?                                                         # Mean values of the noises
+        self.A = A_0;  # .copy() ?                                              # Drift matrix
+        self.D = D_0;  # .copy() ?                                              # Diffusion Matrix
+        self.N = N_0.reshape((len(N_0),1));   # .copy() ?                       # Mean values of the noises
         
         self.initial_state = initial_state_0;                                   # Initial state of the global system
         
@@ -1314,163 +1414,142 @@ class gaussian_dynamics:
             is_not_stable = np.any( eigvalue.real > 0 );                        # Check if any eigenvalue has positive real part (unstability)
             self.is_stable = not is_not_stable                                  # Store the information of the stability of the system in a class attribute
     
-    def run(self, t_span):
-        """
-        Run every time evolution available at the input timestamps.
-       
-        PARAMETERS:
-            self   - class instance
-            tspan - Array with time stamps when the calculations should be done
-       
-        CALCULATES:
-            result = array with time evolved gaussian states for each timestamp of the input argument t_span
-            each entry of the array is a gaussian_state class instance
-        """
-      
-        status_langevin = self.langevin(t_span);                                                  # Calculate the mean quadratures for each timestamp
-      
-        status_lyapunov = self.lyapunov(t_span);                                                  # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
+    def unconditional_dynamics(self, t_span):
+        """Calculates the time evolution of the initial state following an unconditional dynamics at the input timestamps.
         
-        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution - Integration step failed"         # Make sure the parameters for the time evolution are on the correct order of magnitude!
-        
-        self.build_states();                                                    # Combine the time evolutions calculated above into an array of gaussian states
+       PARAMETERS:
+           tspan - Array with time stamps when the calculations should be done
+       
+       CALCULATES: 
+           self.states_conditional - list of gaussian_state instances with the time evolved gaussian states for each timestamp of the input argument t_span
+       
+        RETURNS:
+            result - list of gaussian_state instances with the time evolved gaussian states for each timestamp of the input argument t_span
+        """
       
-        result = self.state;
-        return result                                                           # Return the array of time evolved gaussian_state
+        R_evolved, status_langevin = self.langevin(t_span);                     # Calculate the mean quadratures for each timestamp
+      
+        V_evolved, status_lyapunov = self.lyapunov(t_span);                     # Calculate the CM for each timestamp (perform time integration of the Lyapunov equation)
+        
+        assert status_langevin != -1 and status_lyapunov != -1, "Unable to perform the time evolution of the unconditional dynamics - Integration step failed"         # Make sure the parameters for the time evolution are on the correct order of magnitude!
+                
+        self.states_unconditional = []                                          # Combine the time evolutions calculated above into an array of gaussian states
+        for i in range(self.N_time):
+            self.states_unconditional.append( gaussian_state(R_evolved[:, i], V_evolved[i]) );
+        
+        result = self.states_unconditional;
+        return result                                                           # Return the array of time evolved gaussian_state following unconditional dynamics
     
     def langevin(self, t_span):
-        """
-        Solve the Langevin equation for the time evolved mean quadratures of the full system
+        """Solve quantum Langevin equations for the time evolved mean quadratures of the multimode systems
        
         Uses ode45 to numerically integrate the average Langevin equations (a fourth order Runge-Kutta method)
        
         PARAMETERS:
-            self   - class instance
-            t_span - timestamps when the time evolution is to be calculated
+            t_span - timestamps when the time evolution is to be calculated (ndarray)
        
         CALCULATES:
-            self.R - a cell with the time evolved mean quadratures where
-            self.R(i,j) is the i-th mean quadrature at the j-th timestamp
+            self.R - a cell with the time evolved mean quadratures where self.R(i,j) is the i-th mean quadrature at the j-th timestamp
         """
         self.t = t_span;                                                        # Timestamps for the simulation
         self.N_time = len(t_span);                                              # Number of timestamps
         
-        if is_a_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
+        if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
             langevin_ode = lambda t, R: np.reshape(np.matmul(self.A(t), R.reshape((len(R),1))) + self.N, (len(R),))        # Function handle that defines the Langevin equation (returns the derivative)
         else:
             langevin_ode = lambda t, R: np.reshape(np.matmul(self.A, np.reshape(R, (len(R),1))) + self.N, (len(R),))           # Function handle that defines the Langevin equation (returns the derivative)
         
-        # np.reshape(np.matmul(self.A, R.reshape((len(R),1))) + self.N, (len(R),))
-        
         solution_langevin = solve_ivp(langevin_ode, [t_span[0], t_span[-1]], np.reshape(self.initial_state.R, (self.Size_matrices,)), t_eval=t_span) # Solve Langevin eqaution through Runge Kutta(4,5)
         # Each row in R corresponds to the solution at the value returned in the corresponding row of self.t
         
-        self.R = solution_langevin.y;                                           # Store the time evolved quadratures in a class attribute
+        R_evolved = solution_langevin.y;                                        # Store the time evolved quadratures in a class attribute
         
-        return solution_langevin.status
-        #  fprintf("Langevin simulation finished!\n\n")                         # Warn user the heavy calculations ended
+        return R_evolved, solution_langevin.status
     
-    def lyapunov(self, t_span):
-        """
-        Solve the lyapunov equation for the time evolved covariance matrix of the full system
+    def lyapunov(self, t_span, is_conditional=False, C=0, Gamma=0):
+        """Solve the lyapunov equation for the time evolved covariance matrix of the full system (both conditional and unconditional cases)
        
-        Uses ode45 to numerically integrate, a fourth order Runge-Kutta method
+        Uses ode45 to numerically integrate the Lyapunov equation, a fourth order Runge-Kutta method
        
         PARAMETERS:
-            self   - class instance
             t_span - timestamps when the time evolution is to be calculated
        
         CALCULATES:
-            'self.V' - a cell with the time evolved covariance matrix where
-             self.V{j} is the covariance matrix at the j-th timestamp
+            'self.V' - a cell with the time evolved covariance matrix where self.V[j] is the covariance matrix at the j-th timestamp in t_span
         """
-      
-        # disp("Lyapunov simulation started...")                                # Warn the user that heavy calculations started (their computer did not freeze!)
         
         self.t = t_span;                                                        # Timestamps for the simulation
-        self.N_time = len(t_span);                                           # Number of timestamps
+        self.N_time = len(t_span);                                              # Number of timestamps
         
         V_0_vector = np.reshape(self.initial_state.V, (self.Size_matrices**2, )); # Reshape the initial condition into a vector (expected input for ode45)
         
-        if is_a_function(self.A):                                          # I have to check if there is a time_dependency on the odes :(
-            ode = lambda t, V: lyapunov_ode(t, V, self.A(t), self.D);           # Function handle that defines the Langevin equation (returns the derivative)
+        if is_conditional:                                                      # Check if the dynamics is conditional or unconditional
+            if is_a_function(self.A):                                           # Check if there is a time_dependency on the odes
+                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A(t), self.D, C, Gamma); # Function handle that defines the Langevin equation (returns the derivative)
+            else:
+                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A, self.D, C, Gamma);    # Lambda unction that defines the Lyapunov equation (returns the derivative)
         else:
-            ode = lambda t, V: lyapunov_ode(t, V, self.A, self.D);              # Lambda unction that defines the Lyapunov equation (returns the derivative)
-        
+            if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
+                ode = lambda t, V: lyapunov_ode_unconditional(t, V, self.A(t), self.D); # Function handle that defines the Langevin equation (returns the derivative)
+            else:
+                ode = lambda t, V: lyapunov_ode_unconditional(t, V, self.A, self.D);    # Lambda unction that defines the Lyapunov equation (returns the derivative)
+                
         solution_lyapunov = solve_ivp(ode, [t_span[0], t_span[-1]], V_0_vector, t_eval=t_span) # Solve Lyapunov equation through Fourth order Runge Kutta
         
-        # Unpack the output of ode45 into a cell where each entry contains the information about the evolved CM at each time
-        self.V = [];                                                            # Initialize a cell to store all CMs for each time
+        # Unpack the output of ode45 into a list where each entry contains the information about the evolved CM at each time
+        V_evolved = []                                                          # Initialize a cell to store the time evolvd CMs for each time
         
         for i in range(len(solution_lyapunov.t)):
-            V_current_vector = solution_lyapunov.y[:,i];                                  # Take the full Covariance matrix in vector form
+            V_current_vector = solution_lyapunov.y[:,i];                                        # Take the full Covariance matrix in vector form
             V_current = np.reshape(V_current_vector, (self.Size_matrices, self.Size_matrices)); # Reshape it into a proper matrix
-            self.V.append(V_current);                                           # Append it on the class attribute
-            
-        return solution_lyapunov.status
-    
-    def build_states(self):
-        """
-        Builds the gaussian state at each time from their mean values and covariance matrices
-        This funciton is completely unnecessary, but it makes the code more readable :)
-       
-        CALCULATES:
-          self.state - array with time evolved gaussian states for each timestamp of the input argument t_span
-          each entry of the array is a gaussian_state class instance
-        """
-      
-        assert self.R.size != 0 and self.V != 0, "No mean quadratures or covariance matrices, can not build time evolved states!"
-        
-        self.state = []
-        
-        for i in range(self.N_time):
-            self.state.append( gaussian_state(self.R[:, i], self.V[i]) );
+            V_evolved.append(V_current);                                                        # Append it on the class attribute
+                    
+        return V_evolved, solution_lyapunov.status
         
     def steady_state(self, A_0=0, A_c=0, A_s=0, omega=0): # *args -> CONSERTAR !
-        """
-        Calculates the steady state for the system
+        """Calculates the steady state for the multimode system
        
-        PARAMETERS:
-          self   - class instance
-        
-          The next parameters are only necessary if the drift matrix has a time dependency (and it is periodic)
-          A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
-          omega - Frequency of the drift matrix
+        PARAMETERS (only needed if the drift matrix has a periodic time dependency):
+          A_0, A_c, A_s - Components of the Floquet decomposition of the drift matrix
+          omega         - Frequency of the drift matrix
         
         CALCULATES:
-          self.steady_state_internal with the steady state (gaussian_state)
-          ss - gaussian_state with steady state of the system
+            self.steady_state_internal - gaussian_state with steady state of the system
+          
+        RETURNS:
+            ss - gaussian_state with steady state of the system
         """
       
         if is_a_function(self.A):                                               # If the Langevin and Lyapunov eqs. have a time dependency, move to the Floquet solution
             ss = self.floquet(A_0, A_c, A_s, omega);
-            self.steady_state_internal = ss;
-        else :                                                                  # If the above odes are time independent, 
+            self.steady_state_internal = ss;                                    # Store it in the class instance
+        
+        else:                                                                   # If the above odes are time independent, 
             assert self.is_stable, "There is no steady state covariance matrix, as the system is not stable!"  # Check if there exist a steady state!
         
-        R_ss = np.linalg.solve(self.A, -self.N);                                # Calculate steady-state mean quadratures
-        V_ss = solve_continuous_lyapunov(self.A, -self.D);                      # Calculate steady-state covariance matrix
+            R_ss = np.linalg.solve(self.A, -self.N);                            # Calculate steady-state mean quadratures
+            V_ss = solve_continuous_lyapunov(self.A, -self.D);                  # Calculate steady-state covariance matrix
         
-        self.steady_state_internal = gaussian_state(R_ss, V_ss);                # Generate the steady state
-        ss = self.steady_state_internal;                                        
+            ss = gaussian_state(R_ss, V_ss);                                    # Generate the steady state
+            self.steady_state_internal = ss;                                    # Store it in the class instance
+            
         return ss                                                               # Return the gaussian_state with the steady state for this system
-        return ss
     
     def floquet(self, A_0, A_c, A_s, omega):
-        """
-        Calculates the staeady state of a system with periodic Hamiltonin/drift matrix
+        """Calculates the staeady state of a system with periodic Hamiltonin/drift matrix
+        
         Uses first order approximation in Floquet space for this calculation
        
         Higher order approximations will be implemented in the future
         
         PARAMETERS:
-          self   - class instance
-        
           A_0, A_c, A_s - components of the Floquet decomposition of the drift matrix
           omega - Frequency of the drift matrix
         
         CALCULATES:
-          self.steady_state_internal with the steady state (gaussian_state)
+          self.steady_state_internal - gaussian_state with steady state of the system
+          
+        RETURNS:
           ss - gaussian_state with steady state of the system
         """
       
@@ -1491,20 +1570,19 @@ class gaussian_dynamics:
         R_ss = R_ss_F[0:M];                                                     # Get only the first entries
         V_ss = V_ss_F[0:M, 0:M];                                                # Get only the first sub-matrix
         
-        self.steady_state_internal = gaussian_state(R_ss, V_ss); # Generate the steady state
-        ss = self.steady_state_internal; 
+        ss = gaussian_state(R_ss, V_ss);                                        # Generate the steady state
+        self.steady_state_internal = ss;                                        # Store it in the class instance
+        
         return ss
     
-    def langevin_semi_classical(self, t_span, N_ensemble=2e+2):
-        """
-        Solve the semi-classical Langevin equation for the expectation value of the quadrature operators
-        using a Monte Carlos simulation to numericaly integrate the Langevin equations
+    def semi_classical(self, t_span, N_ensemble=2e+2):
+        """Solve the semi-classical Langevin equation for the expectation value of the quadrature operators using a Monte Carlos simulation to numerically integrate the Langevin equations
         
         The initial conditions follows the initial state probability density in phase space
         The differential stochastic equations are solved through a Euler-Maruyama method
        
         PARAMETERS:
-          self   - class instance
+          t_span - timestamps when the time evolution is to be calculated
           N_ensemble (optional) - number of iterations for Monte Carlos simulation, default value: 200
        
         CALCULATES:
@@ -1515,7 +1593,7 @@ class gaussian_dynamics:
         self.t = t_span;                                                        # Timestamps for the simulation
         self.N_time = len(t_span);                                              # Number of timestamps
         
-        dt = self.t(2) - self.t(1);                                             # Time step
+        dt = self.t[2] - self.t[1];                                             # Time step
         sq_dt =  np.sqrt(dt);                                                   # Square root of time step (for Wiener proccess in the stochastic integration)
         
         noise_amplitude = self.N + np.sqrt( np.diag(self.D) );                  # Amplitude for the noises (square root of the auto correlations)
@@ -1523,7 +1601,7 @@ class gaussian_dynamics:
         mean_0 = self.initial_state.R;                                          # Initial mean value
         std_deviation_0 =  np.sqrt( np.diag(self.initial_state.V) );            # Initial standard deviation
         
-        self.R_semi_classical = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
+        self.semi_classical_trajectories = np.zeros((self.Size_matrices, self.N_time));    # Matrix to store each quadrature ensemble average at each time
         
         if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
             AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
@@ -1536,12 +1614,333 @@ class gaussian_dynamics:
             X[:,0] = np.random.normal(mean_0, std_deviation_0)                  # Initial Cavity position quadrature (normal distribution for vacuum state)
             
             noise = np.random.standard_normal(X.shape);
-            for k in range(self.N_time):                                        # Euler-Maruyama method for stochastic integration
-                X[:,k+1] = X[:,k] + np.matmul(AA(self.t[k]), X[:,k])*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
+            for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration
+                X[:,k+1] = X[:,k] + (np.matmul(AA(self.t[k]), X[:,k]) + self.N)*dt + sq_dt*np.multiply(noise_amplitude, noise[:,k])
                                    
-            self.R_semi_classical = self.R_semi_classical + X;                  # Add the new  Monte Carlos iteration quadratures to the same matrix
+            self.semi_classical_trajectories = self.semi_classical_trajectories + X;    # Add the new  Monte Carlos iteration quadratures to the same matrix
         
-        self.R_semi_classical = self.R_semi_classical/N_ensemble;               # Divide the ensemble sum to obtain the average quadratures at each time
- 
+        self.semi_classical_trajectories = self.semi_classical_trajectories/N_ensemble; # Divide the ensemble sum to obtain the average quadratures at each time
+        
+        result = self.semi_classical_trajectories
+        return result
+        
+    def langevin_conditional(self, t_span, V_evolved, N_ensemble=200, rho_bath=gaussian_state(), C=0, Gamma=0, V_m=0):
+        """Solve the conditional stochastic Langevin equation for the expectation value of the quadrature operators
+        using a Monte Carlos simulation to numericaly integrate the stochastic Langevin equations
+        
+        The differential stochastic equations are solved through a Euler-Maruyama method
+       
+        PARAMETERS:
+          t_span     - timestamps when the time evolution is to be calculated
+          N_ensemble - number of iterations for Monte Carlos simulation, default value: 200
+          rho_bath   - gaussian_state with the quantum state of the environment's state
+          C          - matrix describing the measurement process (see conditional_dynamics)
+          Gamma      - matrix describing the measurement process (see conditional_dynamics)
+          V_m        - Covariance matrix of the post measurement state
+       
+        CALCULATES:
+          self.quantum_trajectories - list of single realizations of the quantum Monte Carlo method for the mean quadrature vector
+        
+        RETURN:
+          R_conditional - average over the trajectories of the quadrature expectation values
+        """
+        
+        N_ensemble = int(N_ensemble)
+        
+        self.t = t_span;                                                        # Timestamps for the simulation
+        self.N_time = len(t_span);                                              # Number of timestamps
+        
+        dt = self.t[2] - self.t[1];                                             # Time step
+        sq_dt_2 =  np.sqrt(dt)/2.0;                                             # Square root of time step (for Wiener proccess in the stochastic integration)
+        
+        R_conditional = np.zeros((self.Size_matrices, self.N_time));            # Matrix to store each quadrature ensemble average at each time
+        
+        if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
+            AA = lambda t: self.A(t);                                           # Rename the function that calculates the drift matrix at each time
+        else:
+            AA = lambda t: self.A;                                              # If A is does not vary in time, the new function always returns the same value 
+        
+        N_measured2 = C.shape[0]                                                 # Number of modes to be measured
+        C_T = np.transpose(C)
+        Gamma_T = np.transpose(Gamma)
+        
+        R_bath = np.reshape(rho_bath.R, (len(rho_bath.R),))                                   # Mean quadratures for the bath state
+        V_bath = rho_bath.V
+        
+        N = np.reshape(self.N, (len(self.N),))
+        
+        self.quantum_trajectories = N_ensemble*[None]                           # Preallocate memory to store the trajectories
+        
+        for i in range(N_ensemble):                                             # Loop on the random initial positions (# Monte Carlos simulation using Euler-Maruyama method in each iteration)
+            
+            X = np.zeros((self.Size_matrices, self.N_time));                    # Current quatum trajectory to be calculated, this matrix stores each quadrature at each time (first and second dimensions, respectively)
+            X[:,0] = np.reshape(self.initial_state.R, (2*self.initial_state.N_modes,))                     # Initial mean quadratures are exactly the same as the initial state (stochasticity only appear on the measurement outcomes)
+            
+            cov = (V_bath + V_m)/2.0                                            # Covariance for the distribution of the measurement outcome (R_m)
+            R_m = np.random.multivariate_normal(R_bath, cov, (self.N_time))     # Sort the measurement results
+            
+            for k in range(self.N_time-1):                                      # Euler-Maruyama method for stochastic integration of the conditional Langevin equation
+                V = V_evolved[k]                                       # Get current covariance matrix (pre-calculated according to deterministic conditional Lyapunov equation)
+                dw = np.matmul(fractional_matrix_power(V_bath+V_m, -0.5), R_m[k,:] - R_bath) # Calculate the Wiener increment
+                
+                X[:,k+1] = X[:,k] + (np.matmul(AA(self.t[k]), X[:,k]) + N)*dt + sq_dt_2*np.matmul(np.matmul(V, C_T) + Gamma_T, dw) # Calculate the quantum trajectories following the stochastis conditional Langevin equation
+            
+            self.quantum_trajectories[i] = X                                    # Store each trajectory into class instance                
+            
+            R_conditional = R_conditional + X;                                  # Add the new quantum trajectory in order to calculate the average
+        
+        R_conditional = R_conditional/N_ensemble;                               # Divide the ensemble sum to obtain the average quadratures at each time
+        
+        return R_conditional
+    
+    def conditional_dynamics(self, t_span, N_ensemble=1e+2, C_int=None, rho_bath=gaussian_state(), s_list = [1], phi_list=None):
+        """Calculates the time evolution of the initial state following a conditional dynamics at the input timestamps
+        
+        Independent measurements can be applied to the last k modes of the multimode gassian state with N modes
+        
+        PARAMETERS:
+            tspan    - numpy.ndarray with time stamps when the calculations should be done
+            C_int    - interaction matrix between system and bath
+            rho_bath - gaussian state of the bath
+            s        - list of measurement parameters for each measured mode (s=1: Heterodyne ; s=0: Homodyne in x-quadrature ; s=Inf: Homodyne in p-quadrature)
+            phi      - list of directions on phase space of the measurement for each measured mode
+            
+        CALCULATES:
+            self.states_conditional - list of time evolved gaussian_state for each timestamp of the input argument t_span
+            
+        RETURNS:
+            result - list of time evolved gaussian_state for each timestamp of the input argument t_span
+        """
+        
+        # TODO: Check quadrature normalization !
+        
+        N_measured = len(s_list)                                                # Number of modes to be measured
+        
+        if phi_list is None:                                                    # If no measurement direction was indicated, 
+            phi_list = N_measured*[0]                                           # use default value of 0 to all measured modes
+        
+        if C_int is None:                                                       # If no system-bath interaction bath was indicated, 
+            C_int = np.eye(2*N_measured)                                        # use as default value an identity matrix
+        
+        assert N_measured == len(phi_list), "conditional_dynamics can not infer the number of modes to be measured, number of measurement parameters is different from rotation angles"
+        
+        assert rho_bath.N_modes == N_measured, "The number of bath modes does not match the number of measured modes"
+        
+        assert N_measured <= self.initial_state.N_modes, "There are more measured modes, than there are on the initial state"
+        
+        Omega_m = rho_bath.Omega
+        Omega_n = self.initial_state.Omega                                        # Rename bath's symplectic form matrix
+        
+        V_bath = rho_bath.V                                                     # Covariance matrix for the bath's state
+        
+        V_m = 42                                                                # Just to initialize the variable, this value will be removed after the loop
+        for i in range(N_measured):                                             # For each measurement parameter
+            s = s_list[i]
+            temp = np.block([[s, 0],[0, 1/s]])                                  # Calculate the associated mode's covariance matrix after measurement
+            
+            phi = phi_list[i]                                                   # Get rotation of measurement angle
+            Rot = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+            Rot_T = np.transpose(Rot)
+            
+            temp = np.matmul( np.matmul(Rot, temp), Rot_T)                      # Rotate measured covariance matrix
+            
+            V_m = block_diag(temp, V_m)                                         # Build the covariance matrix of the tensor product of these modes
+        V_m = V_m[1:len(V_m), 1:len(V_m)]                                       # Remove the initialization value
+        
+        temp = fractional_matrix_power(V_bath + V_m, -0.5);                     # Auxiliar variable
+        C_int_T = np.transpose(C_int);                                          # Transpose of interaction matrix (auxiliar variable)
+        
+        C = np.matmul(np.matmul(temp, Omega_m), C_int_T);                         # Extra matrix on the Lyapunov equation
+        
+        Gamma = -np.matmul(np.matmul(np.matmul(temp, V_bath), C_int_T), Omega_n); # Extra matrix on the Lyapunov equation
+        
+        is_conditional = True                                                   # Boolean telling auxiliar variable that the conditional dynamics is to be calculated
+        
+        V_evolved, status_lyapunov = self.lyapunov(t_span, is_conditional, C, Gamma);       # Calculate the deterministic dynamics for the CM for each timestamp (perform time integration of the Lyapunov equation)
+        
+        assert status_lyapunov != -1, "Unable to perform the time evolution of the covariance matrix through Lyapunov equation - Integration step failed"
+        
+        R_evolved = self.langevin_conditional(t_span, V_evolved, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
+        
+        self.states_conditional = []                                            # Combine the time evolutions calculated above into an array of gaussian states
+        for i in range(self.N_time):
+            self.states_conditional.append( gaussian_state(R_evolved[:, i], V_evolved[i]) );        
+      
+        result = self.states_conditional;
+        return result                                                           # Return the array of time evolved gaussian_state
+
+
+################################################################################
+
+# Create elementary gaussian states
+def vacuum(N=1):
+    """Returns an N-mode tensor product of vacuum states. Default N=1"""
+    
+    R = np.zeros(2*N)
+    V = np.eye(2*N)
+    
+    return gaussian_state(R, V)
+
+def coherent(alpha=1):
+    """Returns a coherent state with complex amplitude alpha"""
+    R = np.array([[2*alpha.real], [2*alpha.imag]]);                             # Mean quadratures  of a coherent state with complex amplitude alpha
+    V = np.identity(2);                                                         # Covariance matrix of a coherent state with complex amplitude alpha
+    
+    return gaussian_state(R, V)
+
+def squeezed(r=1):
+    """Returns a squeezed state with real squeezing parameter r"""
+    assert np.isreal(r), "Unsupported imaginary amplitude for squeezed state"
+    
+    R = np.array([[0], [0]])                                                    # Mean quadratures  of a coherent state with complex amplitude alpha
+    V = np.diag([np.exp(-2*r), np.exp(+2*r)]);                                  # Covariance matrix of a coherent state with complex amplitude alpha
+    
+    return gaussian_state(R, V)
+
+def thermal(nbar=1):
+    """Returns a thermal state with mean occupation number nbar"""
+    assert nbar>=0, "Imaginary or negative occupation number for thermal state"
+    
+    R = np.array([[0], [0]])                                                    # Mean quadratures  of a coherent state with complex amplitude alpha
+    V = np.diag([2.0*nbar+1, 2.0*nbar+1]);                                      # Covariance matrix of a coherent state with complex amplitude alpha  
+    
+    return gaussian_state(R, V)
+
+
+# Construct another state, from a base gaussian_state
+def tensor_product(rho_list):
+    state_copy = rho_list[0].copy()
+    state_copy.tensor_product(rho_list[1:])
+    
+    return state_copy
+
+def partial_trace(state, indexes):
+    state_copy = state.copy()
+    state_copy.partial_trace(indexes)
+    
+    return state_copy
+
+def only_modes(state, indexes):
+    state_copy = state.copy()
+    state_copy.only_modes(indexes)
+    
+    return state_copy
+
+def check_uncertainty_relation(state):
+    return state.check_uncertainty_relation()
+
+def loss_ancilla(state,idx,tau):
+    state_copy = state.copy()
+    state_copy.loss_ancilla(state,idx,tau)
+    
+    return state_copy
+
+
+# Properties of a gaussian state
+def symplectic_eigenvalues(state):
+    return state.symplectic_eigenvalues()
+
+def purity(state):
+    return state.purity()
+
+def squeezing_degree(state):
+    return state.squeezing_degree()
+
+def von_Neumann_Entropy(state):
+    return state.von_Neumann_Entropy()
+
+def mutual_information(state):
+    return state.mutual_information()
+
+def occupation_number(state):
+    return state.occupation_number()
+
+def number_operator_moments(state):
+    return state.number_operator_moments()
+
+def coherence(state):
+    return state.coherence()
+
+def logarithmic_negativity(state, *args):
+    return state.logarithmic_negativity(*args)
+
+def fidelity(rho_1, rho_2):
+    return rho_1.fidelity(rho_2)
+
+# Density matrix elements
+def density_matrix_coherent_basis(state, alpha, beta):
+    return state.coherence(alpha, beta)
+
+def density_matrix_number_basis(state, n_cutoff=10):
+    return state.density_matrix_number_basis(n_cutoff)
+
+def number_statistics(state, n_cutoff=10):
+    return state.number_statistics(n_cutoff)
+
+
+# Gaussian unitaries (applicable to single mode states)
+def displace(state, alpha, modes=[0]):
+    state_copy = state.copy()
+    state_copy.displace(alpha, modes)
+    
+    return state_copy
+
+def squeeze(state, r, modes=[0]):
+    state_copy = state.copy()
+    state_copy.squeeze(r, modes)
+    
+    return state_copy
+
+def rotate(state, theta, modes=[0]):
+    state_copy = state.copy()
+    state_copy.rotate(theta, modes)
+    
+    return state_copy 
+
+def phase(state, theta, modes=[0]):
+    state_copy = state.copy()
+    state_copy.phase(theta, modes)
+    
+    return state_copy
+
+# Gaussian unitaries (applicable to two mode states)
+def beam_splitter(state, tau, modes=[0, 1]):
+    state_copy = state.copy()
+    state_copy.beam_splitter(tau, modes)
+    
+    return state_copy
+
+def two_mode_squeezing(state, r, modes=[0, 1]):
+    state_copy = state.copy()
+    state_copy.two_mode_squeezing(r, modes)
+    
+    return state_copy
+
+# Generic multimode gaussian unitary
+def apply_unitary(state, S, d):
+    state_copy = state.copy()
+    state_copy.apply_unitary(S, d)
+    
+    return state_copy
+
+
+# Gaussian measurements
+def measurement_general(state, *args):
+    state_copy = state.copy()
+    state_copy.measurement_general(*args)
+    
+    return state_copy
+
+def measurement_homodyne(state, *args):
+    state_copy = state.copy()
+    state_copy.measurement_homodyne(*args)
+    
+    return state_copy
+
+def measurement_heterodyne(state, *args):
+    state_copy = state.copy()
+    state_copy.measurement_heterodyne(*args)
+    
+    return state_copy
 
 

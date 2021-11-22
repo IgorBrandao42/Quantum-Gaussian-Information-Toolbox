@@ -1,5 +1,4 @@
 
-
 # QuGIT: Quantum Gaussian Information Toolbox
 
 QuGIT is an open-sourced object-oriented Python library aimed at simulating multimode quantum gaussian states, finding their unconditional or conditional time evolution according to sets of quantum Langevin and Lyapunov equations and recovering information about these states.
@@ -7,7 +6,6 @@ QuGIT is an open-sourced object-oriented Python library aimed at simulating mult
 Gaussian states are a particular class of continuous variable states that can be completelly described by their quadratures' first and second moments [[Rev. Mod. Phys. 84, 621]](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621).  
 
 The toolbox takes advantage of the structure of gaussian quantum states to efficiently simulate them without the need to work with truncated Hilbert spaces.
-
 
 ## gaussian_state class
 
