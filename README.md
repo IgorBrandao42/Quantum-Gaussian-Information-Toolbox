@@ -1,7 +1,7 @@
 
 # Gaussian Quantum Information Numerical Toolbox (Python)
 
-This is a object-oriented Python library aimed at simulating any multimode quantum gaussian states, findiing their time evolution according to sets of quantum Langevin and Lyapunov equations and recovering the information about these states.
+This is an object-oriented Python library aimed at simulating any multimode quantum gaussian states, findiing their time evolution according to sets of quantum Langevin and Lyapunov equations and recovering the information about these states.
 
 ## gaussian_state class
 Gaussian states are a particular class of continuous variable states that can be completelly described by their quadratures' first and second moments [[Rev. Mod. Phys. 84, 621]](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621).  The toolbox is able to simulate any gaussian state through the class 'gaussian_state' whose input can be
