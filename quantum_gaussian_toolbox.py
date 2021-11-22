@@ -326,7 +326,8 @@ class gaussian_state:                                                           
         nu = self.symplectic_eigenvalues();                                     # Calculates the sympletic eigenvalues of a covariance matrix V
         
                                                                                 # 0*log(0) is NaN, but in the limit that x->0 : x*log(x) -> 0
-        nu[np.abs(nu - 1) < 1e-15] = nu[np.abs(nu - 1) < 1e-15] + 1e-15;                                 # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
+        # nu[np.abs(nu - 1) < 1e-15] = nu[np.abs(nu - 1) < 1e-15] + 1e-15;                                 # Doubles uses a 15 digits precision, I'm adding a noise at the limit of the numerical precision
+        nu[np.abs(nu-1) < 1e-15] = 1+1e-15
         
         nu_plus  = (nu + 1)/2.0;                                                # Temporary variables
         nu_minus = (nu - 1)/2.0;
@@ -509,6 +510,8 @@ class gaussian_state:                                                           
         
         identity = np.identity(2*self.N_modes);
         
+        # V_temp = np.linalg.pinv(np.matmul(V_aux,OMEGA))                         # Trying to bypass singular matrix inversion ! I probably shouldnt do this...
+        # F_tot_4 = np.linalg.det( 2*np.matmul(sqrtm(identity + matrix_power(V_temp                ,+2)/4) + identity, V_aux) );
         F_tot_4 = np.linalg.det( 2*np.matmul(sqrtm(identity + matrix_power(np.matmul(V_aux,OMEGA),-2)/4) + identity, V_aux) );
         
         F_0 = (F_tot_4.real / np.linalg.det(V_1+V_2))**(1.0/4.0);               # We take only the real part of F_tot_4 as there can be a residual complex part from numerical calculations!
@@ -519,17 +522,16 @@ class gaussian_state:                                                           
     # Gaussian unitaries (applicable to single mode states)
     def displace(self, alpha, modes=[0]):
         """
-        Apply displacement operator on a single mode gaussian state
-        TO DO: generalize these operation to many modes!
+        Apply displacement operator
        
         ARGUMENT:
            alpha - complex amplitudes for the displacement operator
            modes - indexes for the modes to be displaced 
         """
         
-        if not (isinstance(alpha, list) or isinstance(alpha, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(alpha, list) or isinstance(alpha, np.ndarray) or isinstance(alpha, range)):      # Make sure the input variables are of the correct type
             alpha = [alpha]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == len(alpha), "Unable to decide which modes to displace nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
@@ -550,9 +552,9 @@ class gaussian_state:                                                           
            modes - indexes for the modes to be squeezed
         """
         
-        if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
+        if not (isinstance(r, list) or isinstance(r, np.ndarray) or isinstance(r, range)):              # Make sure the input variables are of the correct type
             r = [r]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == len(r), "Unable to decide which modes to squeeze nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
@@ -576,9 +578,9 @@ class gaussian_state:                                                           
            modes - indexes for the modes to be squeezed
         """
         
-        if not (isinstance(theta, list) or isinstance(theta, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(theta, list) or isinstance(theta, np.ndarray) or isinstance(theta, range)):      # Make sure the input variables are of the correct type
             theta = [theta]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == len(theta), "Unable to decide which modes to rotate nor by how much" # If the size of the inputs are different, there is no way of telling exactly what it is expected to do
@@ -617,7 +619,7 @@ class gaussian_state:                                                           
         
         # if not (isinstance(tau, list) or isinstance(tau, np.ndarray)):          # Make sure the input variables are of the correct type
         #     tau = [tau]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == 2, "Unable to decide which modes to apply beam splitter operator nor by how much"
@@ -626,16 +628,30 @@ class gaussian_state:                                                           
         i = modes[0]
         j = modes[1] 
         
-        B = np.sqrt(tau)*np.identity(2)
-        S = np.sqrt(1-tau)*np.identity(2)
+        # B = np.sqrt(tau)*np.identity(2)
+        # S = np.sqrt(1-tau)*np.identity(2)
         
-        BS[2*i:2*i+2, 2*i:2*i+2] = B
-        BS[2*j:2*j+2, 2*j:2*j+2] = B
+        # BS[2*i:2*i+2, 2*i:2*i+2] = B
+        # BS[2*j:2*j+2, 2*j:2*j+2] = B
         
-        BS[2*i:2*i+2, 2*j:2*j+2] =  S
-        BS[2*j:2*j+2, 2*i:2*i+2] = -S
+        # BS[2*i:2*i+2, 2*j:2*j+2] =  S
+        # BS[2*j:2*j+2, 2*i:2*i+2] = -S
         
-        # BS = np.block([[B, S], [-S, B]]);
+        ##########################################
+        sin_theta = np.sqrt(tau)
+        cos_theta = np.sqrt(1-tau)
+        
+        BS[2*i  , 2*i  ] = sin_theta
+        BS[2*i+1, 2*i+1] = sin_theta
+        BS[2*j  , 2*j  ] = sin_theta
+        BS[2*j+1, 2*j+1] = sin_theta
+        
+        BS[2*i+1, 2*j  ] = +cos_theta
+        BS[2*j+1, 2*i  ] = +cos_theta
+        
+        BS[2*i  , 2*j+1] = -cos_theta
+        BS[2*j  , 2*i+1] = -cos_theta
+        ##########################################
         
         BS_T = np.transpose(BS)
         
@@ -653,7 +669,7 @@ class gaussian_state:                                                           
         
         # if not (isinstance(r, list) or isinstance(r, np.ndarray)):              # Make sure the input variables are of the correct type
         #     r = [r]
-        if not (isinstance(modes, list) or isinstance(modes, np.ndarray)):      # Make sure the input variables are of the correct type
+        if not (isinstance(modes, list) or isinstance(modes, np.ndarray) or isinstance(modes, range)):      # Make sure the input variables are of the correct type
             modes = [modes]
         
         assert len(modes) == 2, "Unable to decide which modes to apply two-mode squeezing operator nor by how much"
@@ -1560,7 +1576,7 @@ class gaussian_dynamics:
         return ss
     
     def semi_classical(self, t_span, N_ensemble=2e+2):
-        """Solve the semi-classical Langevin equation for the expectation value of the quadrature operators using a Monte Carlos simulation to numericaly integrate the Langevin equations
+        """Solve the semi-classical Langevin equation for the expectation value of the quadrature operators using a Monte Carlos simulation to numerically integrate the Langevin equations
         
         The initial conditions follows the initial state probability density in phase space
         The differential stochastic equations are solved through a Euler-Maruyama method
@@ -1757,9 +1773,13 @@ class gaussian_dynamics:
 ################################################################################
 
 # Create elementary gaussian states
-def vacuum():
-    """Returns a vacuum state"""
-    return gaussian_state()
+def vacuum(N=1):
+    """Returns an N-mode tensor product of vacuum states. Default N=1"""
+    
+    R = np.zeros(2*N)
+    V = np.eye(2*N)
+    
+    return gaussian_state(R, V)
 
 def coherent(alpha=1):
     """Returns a coherent state with complex amplitude alpha"""
