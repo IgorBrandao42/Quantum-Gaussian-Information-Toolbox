@@ -330,7 +330,8 @@ class gaussian_state:                                                           
         nu[np.abs(nu-1) < 1e-15] = 1+1e-15
         
         nu_plus  = (nu + 1)/2.0;                                                # Temporary variables
-        nu_minus = (nu - 1)/2.0;
+        # nu_minus = (nu - 1)/2.0;
+        nu_minus = np.abs((nu - 1)/2.0);
         g_nu = np.multiply(nu_plus,np.log(nu_plus)) - np.multiply(nu_minus, np.log(nu_minus))
       
         Entropy = np.sum( g_nu );                                               # Calculate the entropy
