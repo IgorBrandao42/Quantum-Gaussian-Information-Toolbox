@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Class simulating the time evolution of a gaussian state
-Github: https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python
+QuGIT - Quantum Gaussian Information Toolbox
+Github: https://github.com/IgorBrandao42/Quantum-Gaussian-Information-Toolbox
 
 Author: Igor Brandão
 Contact: igorbrandao@aluno.puc-rio.br
@@ -404,9 +404,9 @@ class gaussian_state:                                                           
         
         temp = np.multiply(np.matmul(alpha_c, alpha.transpose()), A) + np.multiply(np.matmul(alpha_c, alpha_c.transpose()), B) # Yup, you guessed it, another auxiliar matrix
         
-        m = np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5 # Mean values of number operator (occupation numbers)
+        m = np.real(np.reshape(np.diag(A), (self.N_modes,1)) + np.multiply(alpha, alpha_c) - 0.5) # Mean values of number operator (occupation numbers)
         
-        K = np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real # Covariance matrix for the number operator
+        K = np.real(np.multiply(A, A.conjugate()) + np.multiply(B, B.conjugate()) - 0.25*np.eye(self.N_modes)  + 2.0*temp.real) # Covariance matrix for the number operator
         
         return m, K
     
@@ -1335,7 +1335,7 @@ def lyapunov_ode_unconditional(t, V_old_vector, A, D):
     dVdt_vector = np.reshape(dVdt, (M**2,));                                     # Matrix -> vector
     return dVdt_vector
 
-def lyapunov_ode_conditional(t, V_old_vector, A, D, C, Gamma):
+def lyapunov_ode_conditional(t, V_old_vector, A, D, B):
     """
     Auxiliar internal function defining the Lyapunov equation 
     and calculating the derivative of the covariance matrix
@@ -1349,7 +1349,8 @@ def lyapunov_ode_conditional(t, V_old_vector, A, D, C, Gamma):
     
     # chi = np.matmul(C, V_old) + Gamma             # THIS SHOULD BE FASTER!
     # chi = np.matmul(np.transpose(chi), chi)
-    chi = np.matmul( np.matmul(V_old, np.transpose(C)) + np.transpose(Gamma),  np.matmul(C, V_old) + Gamma )    # Auxiliar matrix
+    # chi = np.matmul( np.matmul(V_old, np.transpose(C)) + np.transpose(Gamma),  np.matmul(C, V_old) + Gamma )    # Auxiliar matrix
+    chi = np.matmul( np.matmul( np.matmul(V_old, B), np.transpose(B)), V_old)    # Auxiliar matrix
     
     dVdt = np.matmul(A, V_old) + np.matmul(V_old, A_T) + D - chi;               # Calculate how much the CM derivative in this time step
     
@@ -1467,7 +1468,7 @@ class gaussian_dynamics:
         
         return R_evolved, solution_langevin.status
     
-    def lyapunov(self, t_span, is_conditional=False, C=0, Gamma=0):
+    def lyapunov(self, t_span, is_conditional=False, AA=0, DD=0, B=0):
         """Solve the lyapunov equation for the time evolved covariance matrix of the full system (both conditional and unconditional cases)
        
         Uses ode45 to numerically integrate the Lyapunov equation, a fourth order Runge-Kutta method
@@ -1486,9 +1487,9 @@ class gaussian_dynamics:
         
         if is_conditional:                                                      # Check if the dynamics is conditional or unconditional
             if is_a_function(self.A):                                           # Check if there is a time_dependency on the odes
-                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A(t), self.D, C, Gamma); # Function handle that defines the Langevin equation (returns the derivative)
+                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A(t)+AA, self.D+DD, B); # Function handle that defines the Langevin equation (returns the derivative)
             else:
-                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A, self.D, C, Gamma);    # Lambda unction that defines the Lyapunov equation (returns the derivative)
+                ode = lambda t, V: lyapunov_ode_conditional(t, V, self.A+AA   , self.D+DD, B);    # Lambda unction that defines the Lyapunov equation (returns the derivative)
         else:
             if is_a_function(self.A):                                               # I have to check if there is a time_dependency on the odes
                 ode = lambda t, V: lyapunov_ode_unconditional(t, V, self.A(t), self.D); # Function handle that defines the Langevin equation (returns the derivative)
@@ -1694,10 +1695,10 @@ class gaussian_dynamics:
         
         return R_conditional
     
-    def conditional_dynamics(self, t_span, N_ensemble=1e+2, C_int=None, rho_bath=gaussian_state(), s_list = [1], phi_list=None):
+    def conditional_dynamics(self, t_span, N_ensemble=1e+2, C_int=None, rho_bath=None, s_list = [1], phi_list=None):
         """Calculates the time evolution of the initial state following a conditional dynamics at the input timestamps
         
-        Independent measurements can be applied to the last k modes of the multimode gassian state with N modes
+        Independent general-dyne measurements can be applied to each mode of the multimode gassian state with N modes
         
         PARAMETERS:
             tspan    - numpy.ndarray with time stamps when the calculations should be done
@@ -1713,24 +1714,28 @@ class gaussian_dynamics:
             result - list of time evolved gaussian_state for each timestamp of the input argument t_span
         """
         
-        # TODO: Check quadrature normalization !
+        # TODO: generalize for arbitrary number of monitored modes        
+        # TODO: Independent measurements can be applied to the last k modes of the multimode gassian state with N modes
+        # N_measured = len(s_list)                                              # Number of monitored modes
+        # Omega_m = rho_bath.Omega                                              # Symplectic form matrix for the monitored modes
+        # Omega_n = self.initial_state.Omega                                    # Symplectic form matrix for the whole system
+        # C = np.matmul(np.matmul(temp, Omega_m), C_int_T);                     # Extra matrix on the Lyapunov equation
+        # Gamma = -np.matmul(np.matmul(np.matmul(temp, V_bath),C_int_T),Omega_n)# Extra matrix on the Lyapunov equation
         
-        N_measured = len(s_list)                                                # Number of modes to be measured
+        N_measured = self.initial_state.N_modes                                 # Number of monitored modes (currently all modes)
+        Omega = self.initial_state.Omega                                        # Symplectic form matrix for the whole system
         
-        if phi_list is None:                                                    # If no measurement direction was indicated, 
-            phi_list = N_measured*[0]                                           # use default value of 0 to all measured modes
+        if phi_list is None: phi_list = N_measured*[0]                          # If no measurement direction was indicated, use default value of 0 to all measured modes
         
-        if C_int is None:                                                       # If no system-bath interaction bath was indicated, 
-            C_int = np.eye(2*N_measured)                                        # use as default value an identity matrix
+        if C_int is None: C_int = np.eye(2*N_measured)                          # If no system-bath interaction bath was indicated, use as default value an identity matrix
+        
+        if rho_bath is None: rho_bath = vacuum(N_measured)                      # If no state for the environment was indicated, use  as default value a tensor product of vacuum states
         
         assert N_measured == len(phi_list), "conditional_dynamics can not infer the number of modes to be measured, number of measurement parameters is different from rotation angles"
         
-        assert rho_bath.N_modes == N_measured, "The number of bath modes does not match the number of measured modes"
+        assert rho_bath.N_modes == N_measured, "The number of bath modes does not match the number of monitored modes"
         
-        assert N_measured <= self.initial_state.N_modes, "There are more measured modes, than there are on the initial state"
-        
-        Omega_m = rho_bath.Omega
-        Omega_n = self.initial_state.Omega                                        # Rename bath's symplectic form matrix
+        assert N_measured <= self.initial_state.N_modes, "There are more monitored modes, than there are on the initial state"
         
         V_bath = rho_bath.V                                                     # Covariance matrix for the bath's state
         
@@ -1746,20 +1751,27 @@ class gaussian_dynamics:
             temp = np.matmul( np.matmul(Rot, temp), Rot_T)                      # Rotate measured covariance matrix
             
             V_m = block_diag(temp, V_m)                                         # Build the covariance matrix of the tensor product of these modes
-        V_m = V_m[1:len(V_m), 1:len(V_m)]                                       # Remove the initialization value
+        V_m = V_m[0:len(V_m)-1, 0:len(V_m)-1]                                   # Remove the initialization value
         
-        temp = fractional_matrix_power(V_bath + V_m, -0.5);                     # Auxiliar variable
-        C_int_T = np.transpose(C_int);                                          # Transpose of interaction matrix (auxiliar variable)
+        temp = np.linalg.inv(V_bath + V_m)                     # Auxiliar variable
+        temp_minus = fractional_matrix_power(V_bath + V_m, -0.5)
         
-        C = np.matmul(np.matmul(temp, Omega_m), C_int_T);                         # Extra matrix on the Lyapunov equation
+        B = np.matmul(np.matmul(C_int, Omega), temp_minus)                        # Extra matrix on the Lyapunov equation
         
-        Gamma = -np.matmul(np.matmul(np.matmul(temp, V_bath), C_int_T), Omega_n); # Extra matrix on the Lyapunov equation
+        AA = - np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(Omega, C_int), V_bath), temp), Omega), np.transpose(C_int))
+        DD = + np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(Omega, C_int), V_bath), temp), V_bath), np.transpose(C_int)), Omega)
         
         is_conditional = True                                                   # Boolean telling auxiliar variable that the conditional dynamics is to be calculated
         
-        V_evolved, status_lyapunov = self.lyapunov(t_span, is_conditional, C, Gamma);       # Calculate the deterministic dynamics for the CM for each timestamp (perform time integration of the Lyapunov equation)
+        V_evolved, status_lyapunov = self.lyapunov(t_span, is_conditional, AA, DD, B);       # Calculate the deterministic dynamics for the CM for each timestamp (perform time integration of the Lyapunov equation)
         
         assert status_lyapunov != -1, "Unable to perform the time evolution of the covariance matrix through Lyapunov equation - Integration step failed"
+        
+        ################################################################################################################################
+        C = np.transpose(-np.matmul(np.matmul(C_int, Omega), temp))              # Extra matrix on the Lyapunov equation
+        
+        Gamma = np.transpose(np.matmul(np.matmul(np.matmul(Omega, C_int), V_bath), temp)) # Extra matrix on the Lyapunov equation
+        ################################################################################################################################
         
         R_evolved = self.langevin_conditional(t_span, V_evolved, N_ensemble, rho_bath, C, Gamma, V_m)  # Calculate the quantum trajectories and its average
         
