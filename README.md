@@ -12,7 +12,7 @@ The toolbox takes advantage of the structure of gaussian quantum states to effic
 The fundamental building block of the toolbox is its ability to emulate an arbitrary multimode gaussian state, perform gaussian operations, and retrieve information from it. This is achieved through the custom Python class `gaussian_state`, whose constructor arguments are
  - R, V --- numpy.ndarray mean quadrature vector and covariance matrix for the desired gaussian states;
 
-Elementary gaussian states can be created using the library functions: `vaccum()`, `coherent()`, `squeezed()` and `thermal()`.
+Elementary gaussian states can be created using the library functions: `vacuum()`, `coherent()`, `squeezed()` and `thermal()`.
 
 ```python
 import numpy as np
