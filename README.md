@@ -58,7 +58,7 @@ p = th.purity()					  # Calculates the purity of a state
 sq_degree = squeezing_degree(sq)  # Calculates the amount of squeezing
 ```
 
-Please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these and other methods!
+Please refer to the [arXiv:/2201.06368](https://arxiv.org/abs/2201.06368) for a more indepth description of these and other methods!
 
 ## gaussian_dynamics class
 The toolbox is also equipped with a second class 'gaussian_dynamics' to simulate unconditional and conditional time evolution of a given initial state (`gaussian_state`) following a gaussian preserving dynamics dictated by an arbitrary set of quantum Langevin and Lyapunov equations and general-dyne measurements.
@@ -89,7 +89,7 @@ states = simulation.unconditional_dynamics(t)  # Simulate
 # Retrieve a list of time evolved gaussian_state class instances
 ```
 
-We note that  the toolbox is able to account for time dependent drift matrices given by gufunc or lambda functions. Please refer to the [initial  documentation pdf](https://github.com/IgorBrandao42/Gaussian-Quantum-Information-Numerical-Toolbox-python/blob/main/Documentation%20-%20Quantum_Gaussian_Information_Toolbox%20-%20python.pdf) for a more indepth description of these methods
+We note that  the toolbox is able to account for time dependent drift matrices given by gufunc or lambda functions. Please refer to the [arXiv:2201.06368](https://arxiv.org/abs/2201.06368) for a more indepth description of these methods
 
 
 ## Dependencies
@@ -114,23 +114,19 @@ In the file **Example_gaussian_dynamics.py** there is a basic example of the cap
  
  [Contact me](mailto:igorbrandao@aluno.puc-rio.br) --- [ Google Scholar](https://scholar.google.com.br/citations?user=WuywvSEAAAAJ) --- [Research Gate](https://www.researchgate.net/profile/Igor-Brandao-2)
 
-## Mathematical Formalism
-For the study of Gaussian Quantum Information, this code was based on and uses the same formalism as:
-
-> Christian Weedbrook, Stefano Pirandola, Raúl García-Patrón, Nicolas J. Cerf, Timothy C. Ralph, Jeffrey H. , "Gaussian quantum information", [Rev. Mod. Phys. 84, 621](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.84.621)
-
-For the quantum fidelity, see:
-> L. Banchi, S. L. Braunstein, S. Pirandola, " Quantum Fidelity for Arbitrary Gaussian States", [[Phys. Rev. Lett. 115, 260501]](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.115.260501)
-
-For the coherence, see:
-> J. Xu, "Quantifying coherence of Gaussian states", [[Phys. Rev. A 93, 032111 (2016)]](https://journals.aps.org/pra/abstract/10.1103/PhysRevA.93.032111).
+## Formalism
+For a brief introduction to gaussian states and dynamics, list of toolbox  methods, examples of usage and references, please see the acompaning paper to this toolbox:
+> I. Brandão, D. Tandeitnik, T. Guerreiro, " QuGIT: a numerical toolbox for Gaussian quantum states", [arXiv:2201.06368](https://arxiv.org/abs/2201.06368)
 
 ## License
 This code is made available under the Creative Commons Attribution - Non Commercial 4.0 License. For full details see LICENSE.md.
 
-Cite this toolbox as: 
-> Igor Brandão, "Quantum Gaussian Information Toolbox", https://github.com/IgorBrandao42/Quantum-Gaussian-Information-Toolbox. Retrieved <*date-you-downloaded*>
+## Citing
+If you make use of QuGIT in your research please add a citation to the accompaning paper: [[arXiv:2201.06368]](https://arxiv.org/abs/2201.06368)
 
+and acknowledge using:
+
+> This work makes use of the QuGIT toolbox.
 
 ## Acknowledgment
 The author thanks Daniel Ribas Tandeitnik and Professor Thiago Guerreiro for helpful discussions, and Professor Dan Marchesin for all the coding lessons. The author is thankful for support received from FAPERJ Scholarships No. E-26/200.270/2020 and CNPq Scholarship No. 140279/2021-0.
