@@ -122,9 +122,7 @@ For a brief introduction to gaussian states and dynamics, list of toolbox  metho
 This code is made available under the Creative Commons Attribution - Non Commercial 4.0 License. For full details see LICENSE.md.
 
 ## Citing
-If you make use of QuGIT in your research please add a citation to the accompaning paper: [[arXiv:2201.06368]](https://arxiv.org/abs/2201.06368)
-
-and acknowledge using:
+If you make use of QuGIT in your research please add a citation to the accompaning paper: [[arXiv:2201.06368]](https://arxiv.org/abs/2201.06368) and acknowledge using:
 
 > This work makes use of the QuGIT toolbox.
 
