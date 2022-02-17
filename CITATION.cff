@@ -1,8 +1,27 @@
-@misc{brandão2022qugit,
-      title={QuGIT: a numerical toolbox for Gaussian quantum states}, 
-      author={Igor Brandão and Daniel Tandeitnik and Thiago Guerreiro},
-      year={2022},
-      eprint={2201.06368},
-      archivePrefix={arXiv},
-      primaryClass={quant-ph}
-}
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Brandão"
+  given-names: "Igor"
+- family-names: "Tandeitnik"
+  given-names: "Daniel"
+title: "QuGIT: Quantum Gaussian Information Toolbox"
+version: 1.0
+date-released: 2022-01-20
+url: "https://github.com/IgorBrandao42/Quantum-Gaussian-Information-Toolbox"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Brandão"
+    given-names: "Igor"
+  - family-names: "Tandeitnik"
+    given-names: "Daniel"
+  - family-names: "Guerreiro"
+    given-names: "Thiago"
+  identifier: "2201.06368"
+  journal: "arXiv"
+  month: 01
+  start: 1 # First page number
+  end: 10 # Last page number
+  title: "QuGIT: a numerical toolbox for Gaussian quantum states"
+  year: 2022
