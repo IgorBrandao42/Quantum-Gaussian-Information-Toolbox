@@ -21,7 +21,6 @@ preferred-citation:
   identifier: "2201.06368"
   journal: "arXiv"
   month: 01
-  start: 1 # First page number
-  end: 10 # Last page number
+  start: 2201.06368 # First page number
   title: "QuGIT: a numerical toolbox for Gaussian quantum states"
   year: 2022
