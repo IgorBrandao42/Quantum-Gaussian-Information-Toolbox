@@ -19,8 +19,7 @@ preferred-citation:
   - family-names: "Guerreiro"
     given-names: "Thiago"
   identifier: "2201.06368"
-  journal: "arXiv"
+  journal: "arXiv: 2201.06368"
   month: 01
-  start: 2201.06368 # First page number
   title: "QuGIT: a numerical toolbox for Gaussian quantum states"
   year: 2022
